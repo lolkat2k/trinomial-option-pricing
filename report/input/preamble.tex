@@ -1,0 +1,56 @@
+% the article class is per default; onesided, openany
+% (it does not know about chapters)
+\documentclass[a4paper,oneside]{article}
+
+% hyphenation, special characters, etc. in the specified languages
+\usepackage[english]{babel}
+
+% https://en.wikibooks.org/wiki/LaTeX/Fonts#Font_encoding
+\usepackage[T1]{fontenc}
+
+% https://en.wikibooks.org/wiki/LaTeX/Special_Characters
+\usepackage[utf8]{inputenc}
+
+% font
+\usepackage{palatino}
+
+% title
+\title{
+  {\Large\bfseries Programming Massively Parallel Hardware} \\
+  {\Large\bfseries Fall, 2017} \\
+  {\Large\bfseries Trinomial Option Pricing}
+}
+
+% author
+\author{
+  Hjalte Abelskov
+  \and
+  Dolapo Olunlade
+  \and
+  Sune Hellfritzsch
+}
+
+% math
+\usepackage{amssymb}
+\usepackage{mathtools}
+\mathtoolsset{showonlyrefs}
+
+% theorems
+\newtheorem{defn}{Definition}
+
+% caligraphic letters
+\newcommand{\K}[0]{\mathcal{K}}
+\newcommand{\M}[0]{\mathcal{M}}
+\newcommand{\C}[0]{\mathcal{C}}
+\newcommand{\A}[0]{\mathcal{A}}
+\renewcommand{\O}[0]{\mathcal{O}}
+\renewcommand{\l}[0]{\ell}
+\newcommand{\D}[0]{\mathcal{D}}
+
+% schema algorithms
+\newcommand{\gen}[1]{\mathtt{Gen_k}(#1)}
+\newcommand{\enc}[1]{\mathtt{Enc_k}(#1)}
+\newcommand{\dec}[1]{\mathtt{Dec_k}(#1)}
+
+% other
+\newcommand{\negl}[0]{\mathtt{negl(n)}}
