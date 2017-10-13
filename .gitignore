@@ -1,0 +1,15 @@
+# latex builds
+*.aux
+*.log
+*.pdf
+*.bak
+
+*.fdb_latexmk
+*.fls
+*.nav
+*.out
+*.snm
+*.toc
+
+# compiled sources
+op-crank-nicolson-sequential
