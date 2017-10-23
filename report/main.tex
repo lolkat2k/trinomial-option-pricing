@@ -1,12 +1,29 @@
-%%% All settings are hidden in here.
+%%% all settings are hidden in here.
 \input{input/preamble}
 
 \begin{document}
 
-%%% Title, authors and affiliations (defined in preamble).
-\maketitle
+%%% title, authors and affiliations (defined in preamble)
+%\maketitle
 
-%%% Content.
-\input{input/content/test}
+%%% abstract
+%\input{input/content/abstract}
+
+%%% table of contents
+%\tableofcontents
+
+%%% content
+\input{input/content/trinomial-tree-model}
+
+%%% references (beware of page numbering)
+\newpage
+\addcontentsline{toc}{section}{References}
+\bibliographystyle{alpha}
+\bibliography{input/references}
 
 \end{document}
+
+%%% bibliography
+%%\bibliographystyle{abbrv} % [1]
+%%\bibliographystyle{alpha} % [Mal89]
+%%\bibliographystyle{apalike} % [Malmkjr, 89]

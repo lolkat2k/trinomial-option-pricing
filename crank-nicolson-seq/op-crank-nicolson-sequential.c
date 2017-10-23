@@ -32,7 +32,7 @@ void finitedifference(double *q, double r, double sigma_in,
   double *a = (double *)malloc(mem_size);
   double *b = (double *)malloc(mem_size);
   double *c = (double *)malloc(mem_size);
-    
+
   // variables for forward and backward substitution
   double e;
   double *f = (double *)malloc(mem_size);
@@ -90,7 +90,7 @@ void finitedifference(double *q, double r, double sigma_in,
     // determine start and end values
     q[0]  = x[0];
     q[nx] = x[nx];
-    
+
     for(int i=1; i<=nx; i++) {
       q[i] = -1 * a[i] * x[i-1] + (2 - b[i]) * x[i] - 1 * c[i] * x[i + 1];
     }
@@ -126,7 +126,7 @@ int main()
 
   // interpolating option array for correct pricing
   int tmp  = floor((ua - xmin) / dx);
-  double w = ((ua - xmin) / dx - tmp); 
+  double w = ((ua - xmin) / dx - tmp);
 
   eu_call(q, strike, xmin, nx, dx);
   //  eu_put(q, strike, xmin, nx, dx);
