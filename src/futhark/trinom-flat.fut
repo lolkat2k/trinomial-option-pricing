@@ -520,18 +520,7 @@ let formatOptions [numOptions]
   let n_max = reduce_comm (\x y -> i32.max x y) 0 ns
   let m_max = reduce_comm (\x y -> i32.max x y) 0 ms
 
-
-  let optionData = options[0]
-  let T  = #Maturity      optionData
-  let n  = #NumberOfTerms optionData
-  let dt = T / (i2r n)
-  let a  = #ReversionRateParameter optionData
-  let M  = (r_exp (zero - a*dt)) - one
-  let jmax = i32 (- 0.184 / M) + 1
-  let m  = jmax + 2
-
-  let n_max = n + 1
-  let maxOptionsInChunk = w / (2*m+1)
+  let maxOptionsInChunk = w / (2*m_max+1)
   let num_chunks = (numOptions + maxOptionsInChunk - 1) / maxOptionsInChunk
   let chunks = map (\ c_ind ->
                               let num = if c_ind == num_chunks - 1

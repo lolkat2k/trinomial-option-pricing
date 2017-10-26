@@ -1,4 +1,3 @@
-#include <float.h> // double_max
 #include <math.h>  // exp
 
 /* Data structures */
@@ -129,6 +128,7 @@ double forward_helper(double M, double dr, double dt, double alphai,
   return res;
 }
 
+
 /* backward propagation helper */
 double backward_helper()
 {
@@ -176,14 +176,111 @@ double backward_helper()
   }
 
   // OBS: need to define your own max function
-  if(i == ((int)(3 / dt))) { res = double_max(X - res, 0); }
+  if(i == ((int)(3 / dt))) { res = max_for_doubles(X - res, 0); }
 
   return res;
 }
 
 
+/* trinomial chunk kernel */
+__global__ void trinom_chunk_kernel(double yield_curve,
+				    double *strikes,
+				    double *maturities,
+				    double *reversion_rates,
+				    double *volatilities,
+				    int *num_termss,
+				    double n_max,          // maximum number of time steps
+				    int *options_in_chunk, // size: [number_of_blocks]
+				    int *option_indices,   // size: [num_blocks][maxOptionsInChunk]
+				    int max_options_in_chunk)
+{
+  // START: Cosmin's
+  int option_chunk_x = options_in_chunk[blockIdx.x];
+  int *option_in_chunk_x = option_indices + blockIdx.x * max_options_in_chunk;
+  double X = strikes[options_in_chunk[i]];
+  // END: Cosmin's
+
+
+
+
+  // START: Mine based on Cosmin's
+  unsigned int lid = threadIdx.x;
+  int option = options_in_chunk[lid]; // Cosmins i is lid.
+  double X = strikes[option];
+  double T = maturities[option];
+  // END: Mine based on Cosmin's
+
+
+
+
+
+  // This was the correct thought
+  double T = maturities[idx];
+  int n     = num_termss[idx];
+  double dt = T / ((double) n);
+  /*
+                let X  = #StrikePrice     option
+                let T  = #Maturity        option
+                let n  = #NumberOfTerms   option
+                let dt = T / (i2r n)
+                let a  = #ReversionRateParameter option
+                let sigma = #VolatilityParameter option
+                let V  = sigma*sigma*( one - (r_exp (0.0 - 2.0*a*dt)) ) / (2.0*a)
+                let dr = r_sqrt( (1.0+2.0)*V )
+                let M  = (r_exp (0.0 - a*dt)) - 1.0
+                let jmax = i32 (- 0.184 / M) + 1
+                let m  = jmax + 2
+  */
+
+  if(lid < sum_of_qlens_in_block) {
+    // 1. forward iteration
+    for(int i=0; i<n_max; i++) {
+      if() { // guard because of __synthreads
+      }
+      // barrier because of dependency between q_{i} and q_{i+1}
+      __syncthreads();
+    }
+
+    // 2. backward iteration
+    for(int i=0; i<n_max; i++) {
+      if() { // guard because of __synthreads
+      }
+      // barrier because of dependency between c_{i-1} and c_{i}
+      __syncthreads();
+    }
+  } // END: lid < sum_of_qlens_in_block
+}
+
 
 int main()
 {
+  // small.in - should be read from file
+  double strike[1]         = 0.7965300572556244; // long double?
+  double maturity[1]       = 9.0000;
+  int num_terms[1]         = 108;
+  double reversion_rate[1] = 0.1000;
+  double volatility[1]     = 0.0100;
+
+  // set maximum chunk size
+  int w = 256;
+
+  // start out with: (assuming that all options are equal)
+  // n_max := options[0].n
+  // m_max := options[0].m
+
+  // compute: chunks
+  // each thread should know here to read from when data is
+  // in global device memory
+
+  // copy data from host to device
+
+  // compute block and grid dimensions
+  // - block: (1, 1, w)
+  // - grid:  (1, ceil(sum(Qlen) / w)
+
+  // execute kernel
+
+  // copy data from device to host
+
   return 0;
 }
