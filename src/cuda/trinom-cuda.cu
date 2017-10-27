@@ -180,7 +180,10 @@ double backward_helper()
 
   return res;
 }
-
+// START: Cosmin's
+// int option_chunk_x = options_in_chunk[blockIdx.x];
+// int *option_in_chunk_x = option_indices + blockIdx.x * max_options_in_chunk;
+// double X = strikes[options_in_chunk[i]];
 
 /* trinomial chunk kernel */
 __global__ void trinom_chunk_kernel(double yield_curve,
@@ -189,50 +192,31 @@ __global__ void trinom_chunk_kernel(double yield_curve,
 				    double *reversion_rates,
 				    double *volatilities,
 				    int *num_termss,
-				    double n_max,          // maximum number of time steps
+				    int n_max,          // maximum number of time steps
 				    int *options_in_chunk, // size: [number_of_blocks]
-				    int *option_indices,   // size: [num_blocks][maxOptionsInChunk]
+				    int *option_indices,   // size: [number_of_blocks][maxOptionsInChunk]
 				    int max_options_in_chunk)
 {
-  // START: Cosmin's
-  int option_chunk_x = options_in_chunk[blockIdx.x];
-  int *option_in_chunk_x = option_indices + blockIdx.x * max_options_in_chunk;
-  double X = strikes[options_in_chunk[i]];
-  // END: Cosmin's
-
-
-
-
-  // START: Mine based on Cosmin's
+  // computing option id
   unsigned int lid = threadIdx.x;
-  int option = options_in_chunk[lid]; // Cosmins i is lid.
-  double X = strikes[option];
-  double T = maturities[option];
-  // END: Mine based on Cosmin's
+  int option_chunk = options_in_chunk[blockIdx.x];
+  int *options_in_chunk = option_indices + blockIdx.x * max_options_in_chunk;
+  int option_id = options_in_chunk[lid];
 
-
-
-
-
-  // This was the correct thought
-  double T = maturities[idx];
-  int n     = num_termss[idx];
+  // computing option specific values
+  double X = strikes[option_id];
+  double T = maturities[option_id];
+  int n    = num_termss[option_id];
+  double a = reversion_rates[option_id];
+  double sigma = volatilities[option_id];
   double dt = T / ((double) n);
-  /*
-                let X  = #StrikePrice     option
-                let T  = #Maturity        option
-                let n  = #NumberOfTerms   option
-                let dt = T / (i2r n)
-                let a  = #ReversionRateParameter option
-                let sigma = #VolatilityParameter option
-                let V  = sigma*sigma*( one - (r_exp (0.0 - 2.0*a*dt)) ) / (2.0*a)
-                let dr = r_sqrt( (1.0+2.0)*V )
-                let M  = (r_exp (0.0 - a*dt)) - 1.0
-                let jmax = i32 (- 0.184 / M) + 1
-                let m  = jmax + 2
-  */
+  double V  = sigma * sigma * (1 - (exp(0.0 - 2.0 * a * dt)) ) / (2.0 * a);
+  double dr = sqrt((1.0 + 2.0) * V);
+  double M  = exp(0.0 - a * dt) - 1.0;
+  double jmax = ((int)(-0.184 / M)) + 1;
+  int m = jmax + 2;
 
-  if(lid < sum_of_qlens_in_block) {
+  if(lid < sum_of_qlens_in_block) { // maybe some guard here
     // 1. forward iteration
     for(int i=0; i<n_max; i++) {
       if() { // guard because of __synthreads
