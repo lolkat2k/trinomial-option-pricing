@@ -78,7 +78,7 @@ double forward_helper(double M, double dr, double dt, double alphai,
       pu*QCopy[beg_ind+j-1+m]*eRdt_d1;
   } // END_OF: (j == (jmax - 1))
   else if(j == (jmax - 2)) {
-    double eRdt_u2 = exp(-(((double)(j-2))*dr + alphai) * dt);
+    double eRdt_u2 = exp(-(((double)(j+2))*dr + alphai) * dt);
     double pd_c = PD_C(j + 2, M);
     pd = PD_A(j + 1, M);
     pm = PM_A(j, M);
@@ -132,7 +132,7 @@ double forward_helper(double M, double dr, double dt, double alphai,
 /* backward propagation helper */
 double backward_helper()
 {
-  double eRdt = exp(-((double)(j)  *dr+alphai)*dt);
+  double eRdt = exp(-((double)(j)*dr + alphai)*dt);
   double res;
   double pu, pm, pd;
 
@@ -176,6 +176,7 @@ double backward_helper()
   }
 
   // OBS: need to define your own max function
+  // The 3 is the length of contract. Here 3 years. Maybe parameterize it?
   if(i == ((int)(3 / dt))) { res = max_for_doubles(X - res, 0); }
 
   return res;
