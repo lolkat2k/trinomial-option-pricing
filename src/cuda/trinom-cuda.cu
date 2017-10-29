@@ -165,7 +165,7 @@ double backward_helper(double X, double M, double dr, double dt,
     res = (pu*CallCopy[beg_ind+j+m+2] +
 	   pm*CallCopy[beg_ind+j+m+1] +
 	   pd*CallCopy[beg_ind+j+m]) *
-          eRdt
+          eRdt;
   } else {
     // central node
     pu = PU_A(j, M);
