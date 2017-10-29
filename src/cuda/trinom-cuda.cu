@@ -130,7 +130,9 @@ double forward_helper(double M, double dr, double dt, double alphai,
 
 
 /* backward propagation helper */
-double backward_helper()
+double backward_helper(double X, double M, double dr, double dt, 
+		       double alphai, double *CallCopy, int beg_ind, int m, 
+		       int i, int jmax, int j)
 {
   double eRdt = exp(-((double)(j)*dr + alphai)*dt);
   double res;
