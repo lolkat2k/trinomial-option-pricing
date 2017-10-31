@@ -266,7 +266,7 @@ let trinomialChunk [ycCount] [numAllOptions] [maxOptionsInChunk]
   let alphass = scatter alphass
                         ( map (\i->i*seq_len) (iota maxOptionsInChunk) )
                         ( replicate maxOptionsInChunk (#P (h_YieldCurve[0])) )
-  --let alphass = reshape ((maxOptionsInChunk,seq_len)) alphass
+  -- let alphass = reshape ((maxOptionsInChunk, seq_len)) alphass
 
   -- compute n_maxInChunk
   -- let n_maxInChunk = reduce (\x y -> i32.max x y) (-1) ns
