@@ -1,19 +1,5 @@
 #include <math.h>  // exp
 
-/* Data structures */
-struct YieldCurveData {
-  double P; // Discount Factor Function
-  double t; // Time [days]
-};
-
-struct OptionData {
-  double strike;
-  double maturity;
-  int number_of_terms;
-  double reversion_rate;
-  double volatility;
-};
-
 /* Probability measures for tree construction */
 // Exhibit 1A (-jmax < j < jmax)
 #define PU_A(j, M) ((1/6) + (((double)(j*j))*M*M + ((double)j)*M) * (1/2))
@@ -190,34 +176,55 @@ double backward_helper(double X, double M, double dr, double dt,
 
 /* trinomial chunk kernel */
 __global__ void trinom_chunk_kernel(
-            float *yield_curve,
-				    double *strikes,
-				    double *maturities,
-				    double *reversion_rates,
-				    double *volatilities,
-            int ycCount, // number of yield curves
-            int numAllOptions, // number of options in total
-				    int *num_terms,
-				    int n_max,          // maximum number of time steps
-				    int *options_in_chunk, // size: [number_of_blocks]
-				    int *option_indices,   // size: [number_of_blocks][maxOptionsInChunk]
-				    int max_options_in_chunk,
-            float *alphass)
+                     int num_all_options, // number of options in total
+                     int max_options_in_chunk, // blockdimensions, i.e. w
+                     int *options_in_chunk, // list of options per block size: [number_of_blocks]
+                     int *option_indices   // size: [number_of_blocks][maxOptionsInChunk]
+
+                     // These 4 have length numAllOptions
+                     float *strikes,
+                     float *maturities,
+                     float *reversion_rates,
+                     float *volatilities
+
+                     int n_max,    // maximum number of time steps
+                     int *num_terms,
+                                          
+                     int yc_count, // number of yield curves
+                     float *yield_curve_P,
+                     float *yield_curve_t,
+                     float *alphass
+                     )
 {
   extern __shared__ char sh_mem[];
+  
+  int w = blockDim.x;
+  int seq_len = n_max + 1;
+  int num_options = options_in_chunk[blockIdx.x];
+  int *options_in_chunk = option_indices + blockIdx.x * max_options_in_chunk;
 
-  volatile float* tmp_scan = (float*) sh_mem;
-  volatile float* Qs       = (float*) (tmp_scan + blockDim.x);
-  volatile float* QCopys'  = (float*) (Qs + blockDim.x);
-  volatile int* iota2mp1   = (int*) (QCopys' + max_options_in_chunk)
-  volatile int* flags      = (int*) (iota2mp1 + blockDim.x);
-  volatile int* sgm_inds   = (int*) (flags + blockDim.x);
-  volatile float* tmpss    = (float*) (sgm_inds + max_options_in_chunk);
-  volatile float* tmpss_scan = (float*) (tmpss + max_options_in_chunk);
-  volatile int* alpha_inds = (int*) (? + max_options_in_chunk);
-
-
-  volatile float* Xs    = (float*)(tmpss_scan + blockDim.x);
+  volatile float* tmp_scan   = (float*) sh_mem;
+  volatile int* flags        = (int*) (tmp_scan + max_options_in_chunk);
+  volatile int* sgm_inds     = (int*) (flags + w);
+  volatile int* iota2mp1     = (int*) (sgm_inds + w);
+  volatile float* Qs         = (float*) (iota2mp1 + w);
+  volatile float* QCopys_    = (float*) (Qs + w);
+  volatile int* imaxs        = (int*) (QCopys_ + w);
+  volatile float* Qs_        = (float*) (imaxs + max_options_in_chunk);
+  volatile float* tmpss      = (float*) (Qs_ + w);
+  volatile float* tmpss_scan = (float*) (tmpss + w);
+  volatile int* alpha_vals   = (float*) (tmpss_scan + w);
+  volatile int* Ps           = (float*) (alpha_vals + max_options_in_chunk);
+  // alphass_ is defined after the shared memory arrays
+  volatile float* Qs__       = (float*) (Ps + max_options_in_chunk);
+  volatile float* Calls      = (float*) (Qs__ + w);
+  volatile float* is         = (float*) (Calls + w);
+  volatile float* CallCopys_ = (float*) (is + max_options_in_chunk);
+  volatile float* Calls_     = (float*) (CallCopys_ + w);
+  volatile float* Calls__    = (float*) (Calls_ + w);
+  volatile float* res        = (float*) (Calls__ + w);
+  
+  volatile float* Xs    = (float*)(res   + max_options_in_chunk);
   volatile float* ns    = (float*)(Xs    + max_options_in_chunk);
   volatile float* dts   = (float*)(ns    + max_options_in_chunk);
   volatile float* drs   = (float*)(dts   + max_options_in_chunk);
@@ -225,10 +232,8 @@ __global__ void trinom_chunk_kernel(
   volatile float* jmaxs = (float*)(Ms    + max_options_in_chunk);
   volatile float* ms    = (float*)(jmaxs + max_options_in_chunk);
 
-  // computing option id
-  int num_options = options_in_chunk[blockIdx.x];
-  int *options_in_chunk = option_indices + blockIdx.x * max_options_in_chunk;
-
+  float *alphass_ = alphass + blockIdx.x * num_options * (seq_len);
+  // computing option id and values for this particular option
   if (threadIdx.x < num_options) {
     int option_id = options_in_chunk[threadIdx.x];
     
@@ -251,7 +256,6 @@ __global__ void trinom_chunk_kernel(
     ms[threadIdx.x] = m;
   }
   __syncthreads();
-  int w = blockDim.x;
 
   // Translating map_lens
   if (threadIdx.x < num_options) {
@@ -301,10 +305,8 @@ __global__ void trinom_chunk_kernel(
     }
   }
 
-  int seq_len = n_max + 1;
-  float *blockalphas = alphass + blockIdx.x * num_options * (seq_len);
   if (threadIdx.x < num_options) {
-    blockalphas[threadIdx.x * seq_len] = yield_curve[0].P;
+    alphass_[threadIdx.x * seq_len] = yield_curve[0].P;
   }
   __syncthreads();
 
@@ -518,6 +520,7 @@ int main()
   // start out with: (assuming that all options are equal)
   // n_max := options[0].n
   // m_max := options[0].m
+  
 
   // compute: chunks
   // each thread should know here to read from when data is
@@ -528,13 +531,11 @@ int main()
   // compute block and grid dimensions
   // - block: (1, 1, w)
   // - grid:  (1, ceil(sum(Qlen) / w)
-
-  // third kernel argument til trinom-kernel should be the shared memory size.
-  // Look at IncSgmScan sgmScanIncKernel function around line 230.
-  // You do extern __shared__ something something
-  // Then you can do volatile blah = pointer in your shared mem.
+  dim3 block_dim(w, 1, 1);
+  dim3 grid_dim(w + (block_dim.x - 1) / block_dim.x, 1);
 
   // execute kernel
+  trinom_chunk_kernel<<<grid_dim, block_dim, sh_mem_size>>>();
 
   // copy data from device to host
 
