@@ -195,6 +195,8 @@ __global__ void trinom_chunk_kernel(
 				    double *maturities,
 				    double *reversion_rates,
 				    double *volatilities,
+            int ycCount, // number of yield curves
+            int numAllOptions, // number of options in total
 				    int *num_terms,
 				    int n_max,          // maximum number of time steps
 				    int *options_in_chunk, // size: [number_of_blocks]
@@ -206,10 +208,16 @@ __global__ void trinom_chunk_kernel(
 
   volatile float* tmp_scan = (float*) sh_mem;
   volatile float* Qs       = (float*) (tmp_scan + blockDim.x);
-  volatile int* flags      = (int*) (Qs + blockDim.x);
+  volatile float* QCopys'  = (float*) (Qs + blockDim.x);
+  volatile int* iota2mp1   = (int*) (QCopys' + max_options_in_chunk)
+  volatile int* flags      = (int*) (iota2mp1 + blockDim.x);
   volatile int* sgm_inds   = (int*) (flags + blockDim.x);
-  
-  volatile float* Xs    = (float*)(sgm_inds + blockDim.x);
+  volatile float* tmpss    = (float*) (sgm_inds + max_options_in_chunk);
+  volatile float* tmpss_scan = (float*) (tmpss + max_options_in_chunk);
+  volatile int* alpha_inds = (int*) (? + max_options_in_chunk);
+
+
+  volatile float* Xs    = (float*)(tmpss_scan + blockDim.x);
   volatile float* ns    = (float*)(Xs    + max_options_in_chunk);
   volatile float* dts   = (float*)(ns    + max_options_in_chunk);
   volatile float* drs   = (float*)(dts   + max_options_in_chunk);
@@ -218,7 +226,6 @@ __global__ void trinom_chunk_kernel(
   volatile float* ms    = (float*)(jmaxs + max_options_in_chunk);
 
   // computing option id
-  //unsigned int lid = threadIdx.x;
   int num_options = options_in_chunk[blockIdx.x];
   int *options_in_chunk = option_indices + blockIdx.x * max_options_in_chunk;
 
@@ -254,7 +261,7 @@ __global__ void trinom_chunk_kernel(
   }
   __syncthreads();
   // Translating the scan (+) over map_len 
-  T res = scanIncBlock < Add<int>, int >(tmp_scan, threadIdx.x);
+  T scanned_lens = scanIncBlock < Add<int>, int >(tmp_scan, threadIdx.x);
 
   // Build the flags
   flags[threadIdx.x] = 0;
@@ -271,7 +278,7 @@ __global__ void trinom_chunk_kernel(
   // Build sgm_inds
   sgm_inds[threadIdx.x] = 0;
   __syncthreads();
-  if (threadIdx.x < num_options) {
+  if (threadIdx.x < num_options && threadIdx.x > 0) {
     sgm_inds[tmp_scan[threadIdx.x - 1]] = threadIdx.x;
   }
   __syncthreads();
@@ -295,12 +302,13 @@ __global__ void trinom_chunk_kernel(
   }
 
   int seq_len = n_max + 1;
-  float *blockalphas = alphass + blockIdx * num_options * (n_max + 1);
+  float *blockalphas = alphass + blockIdx.x * num_options * (seq_len);
   if (threadIdx.x < num_options) {
     blockalphas[threadIdx.x * seq_len] = yield_curve[0].P;
   }
   __syncthreads();
 
+  // BEGIN FOR LOOP
   for (int i = 0; i < n_max; i++) {
     bool go_on = i < ns[sgm_inds[threadIdx.x]];
     if (go_on) {
@@ -326,7 +334,7 @@ __global__ void trinom_chunk_kernel(
           if (sgm_ind == 0) {
             begind = 0;
           } else {
-            begind = res[sgm_ind - 1];
+            begind = scanned_lens[sgm_ind - 1];
           }
           Qs'[threadIdx.x] = forwardhelper (Ms[sgm_ind], drs[sgm_ind],
                          dts[sgm_ind],
@@ -350,9 +358,9 @@ __global__ void trinom_chunk_kernel(
         if (sgm_ind == 0) {
           begind = 0;
         } else {
-          begind = res[sgm_ind - 1];
+          begind = scanned_lens[sgm_ind - 1];
         }
-        tmpss[threadIdx.x] = Qs'[begind + j + ms[sgm_ind]] * exp(-(float)j) * drs[sgm_ind] * dts[sgm_ind];
+        tmpss[threadIdx.x] = Qs'[begind + j + ms[sgm_ind]] * exp(-(float)j * drs[sgm_ind] * dts[sgm_ind]);
       }
     }
     __syncthreads();
@@ -367,89 +375,133 @@ __global__ void trinom_chunk_kernel(
     }
     __syncthreads();
     
-  }
-
-
-
-  
-
-  
-
-
-
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  // Calculating alphas
-  // alphas = replicate (n + 1) zero
-  // alphas[0] = #P (h_YieldCurve[0])
-  double *alphas = (double*) malloc(n + 1);
-  alpha[0] = yield_curve[0].P;
-  for (int i = 1; i < n + 1; i++){
-    alphas[i] = 0;
-  }
-  
-  // Computing QCopy
-  // Q = map (\i -> if i == m then one else zero) (iota (2 * m + 1))
-  int *Q = (int*) malloc(2 * m + 1);
-  for (int i = 0; i < 2 * m + 1; i++) {
-    if i == m
-  }
-
-  if(lid < sum_of_qlens_in_block) { // maybe some guard here
-    // 1. forward iteration
-    for(int i = 0; i<n_max; i++) {
-      double alphai = alphas[i];
-      if() { // guard because of __synthreads
+    if (go_on) {
+      if (threadIdx.x >= num_options || i >= ns[threadIdx.x]) {
+        Ps[threadIdx.x] = 1.0; 
+      } else {
+        float t = (float)(i+1) * dts[threadIdx.x] + 1.0;
+        float t2 = roundf(t);
+        float t1 = t2 - 1;
+        if (t2 >= ycCount) {
+          t2 = ycCount - 1;
+          t1 = ycCount - 2;
+        }
+        float R = (yield_curve[t2].P - yield_curve[t1].P) / (yield_curve[t2].t - yield_curve[t1].t) * (t * 365 - (yield_curve[t1].t) + (yield_curve[t1].P);
+        P = exp(-R * t);
+        Ps[threadIdx.x] = P;
       }
-      forwardhelper(M, dr, dt, alphai,
-		      double *QCopy, int beg_ind, m, i,
-		      int imax, int jmax, int j);
-      // barrier because of dependency between q_{i} and q_{i+1}
-      __syncthreads();
+    }
+    __syncthreads();
+
+    if(go_on) {
+      alpha_vals[threadIdx.x] = log(alpha_vals[threadIdx.x] / Ps[threadIdx.x]);
     }
 
-    // 2. backward iteration
-    for(int i = 0; i<n_max; i++) {
-      if() { // guard because of __synthreads
+    if(go_on) {
+      if (threadIdx.x < num_options && i < ns[threadIdx.x]) {
+        alpha_inds[threadIdx.x] = threadIdx.x * seq_len + (i+1);
+      } else {
+        alpha_inds[threadIdx.x] = -1;
       }
-      // barrier because of dependency between c_{i-1} and c_{i}
-      __syncthreads();
     }
-  } // END: lid < sum_of_qlens_in_block
+    __syncthreads();
+
+    if(go_on) {
+      alphass'[threadIdx.x] = alpha_vals[alpha_inds[threadIdx.x]];
+    }
+
+    // Qs''
+    if(go_on) {
+      if(threadIdx.x < num_options) {
+        int sgm_ind = sgm_inds[threadIdx.x];
+        if (sgm_ind < num_options && i < ns[sgm_ind]) {
+          Qs''[threadIdx.x] = Qs'[threadIdx.x];
+        }
+      }
+    }
+  } //END OF FOR LOOP
+
+  // Calls
+  if(threadIdx.x < num_options) {
+    int sgm_ind = sgm_inds[threadIdx.x];
+    float jmax = jmaxs[sgm_ind];
+    float m    = ms[sgm_ind];
+    float j = iota2mp1[threadIdx.x];
+    if (j >= -jmax+m && j <= jmax + m) {
+      Calls[threadIdx.x] = 1.0;
+    } else {
+      Calls[threadIdx.x] = 0.0;
+    }
+  }
+
+  __syncthreads();
+  for (int ii = 0; ii < n_max; ii++) {
+    bool go_on = ii < ns[sgm_inds[threadIdx.x]];
+
+    if(go_on) {
+      if (threadIdx.x >= num_options) {
+        is[threadIdx.x] = 0;
+      } else {
+        is[threadIdx.x] = ns[sgm_ind] - 1 - ii;
+      }
+    }
+    __syncthreads();
+
+    if(go_on) {
+      if (threadIdx.x < num_options) {
+        imaxs[threadIdx.x] = min((is[threadIdx.x]+1), jmaxs[threadIdx.x]);
+      }
+    }
+    CallCopys'[threadIdx.x] = Calls[threadIdx.x];
+    __syncthread();
+
+    if(go_on) {
+      if (threadIdx.x < num_options) {
+        int sgm_ind = sgm_inds[threadIdx.x];
+        if (sgm_ind >= num_options || ii >= ns[sgm_ind]) {
+          Calls'[threadIdx.x] = 0.0;
+        } else {
+          int imaxs[sgm_ind];
+          int i = is[sgm_ind];
+          int m = ms[sgm_ind];
+          int j = iota2mp1[threadIdx.x] - m;
+          if (j < (-imax) || j > imax) {
+            Calls'[threadIdx.x] = 0.0;
+          } else {
+            int begind = (sgm_ind == 0) ? 0 : scanned_lens[sgm_ind-1];
+            backwardhelper(Xs[sgm_ind], Ms[sgm_ind], drs[sgm_ind],
+                           dts[sgm_ind], alphass[sgm_ind * seq_len + i],
+                           CallCopys', begind, ms[sgm_ind], i,
+                           jmaxs[sgm_ind], j);
+          }
+        }
+      }
+    }
+
+    // Update calls
+    __syncthreads();
+    if(go_on) {
+      if (threadIdx.x < num_options) {
+        int sgm_ind = sgm_inds[threadIdx.x];
+        if (sgm_ind < num_options && ii < ns[sgm_ind]) {
+          Calls''[threadIdx.x] = Calls'[threadIdx.x];
+        }
+      }
+    }
+  } // END OF FOR LOOP
+  __syncthreads();
+
+  if (threadIdx.x < num_options) {
+    if(threadIdx.x >= num_options) {
+      res[-1] = 0.0; // out of range
+    } else {
+      int begind = (threadIdx.x == 0) ? 0 : scanned_lens[threadIdx.x - 1];
+      int m_ind = begind + ms[threadIdx.x];
+      res[threadIdx.x] = Calls[m_ind];
+    }
+  }
+  __syncthreads();
 }
-
 
 int main()
 {
