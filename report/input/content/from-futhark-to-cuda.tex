@@ -1,4 +1,88 @@
-\section{From Futhark to CUDA}
+\section{Translation from Futhark to CUDA}
 
 How we actual did the translation along with thougths and
 decisions.
+
+
+\subsection{Translation}
+
+Write something about how we translate the \texttt{SOACS}
+from Futhark to CUDA.
+
+\subsubsection{Translating \texttt{maps}}
+
+%
+\begin{figure}[bt]
+\begin{center}
+%% Futhark
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+let map_lens =
+map (\m i ->
+  if i < optionsInChunk
+  then 2*m + 1
+  else 0
+  )
+ms (iota maxOptionsInChunk)
+\end{lstlisting}
+\end{minipage}
+%% CUDA
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+if(threadIdx.x<num_options)
+{
+  tmp_scan[threadIdx.x] =
+    2 * ms[threadIdx.x] + 1;
+} else {
+  tmp_scan[threadIdx.x] = 0;
+}
+__syncthreads();
+\end{lstlisting}
+\end{minipage}
+\caption{Transforming \texttt{maps} from Futhark (left) to
+  CUDA (right).}
+\end{center}
+\end{figure}
+%
+
+\subsubsection{Translating \texttt{scatter}}
+
+%
+\begin{figure}[bt]
+\begin{center}
+%% Futhark
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+let sgm_inds = scatter
+  (replicate w 0)
+  len_inds
+  (iota maxOptionsInChunk)
+\end{lstlisting}
+\end{minipage}
+%% CUDA
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+sgm_inds[threadIdx.x] = 0;
+__syncthreads();
+if(threadIdx.x < num_options &&
+   threadIdx.x > 0)
+{
+  sgm_inds[
+    tmp_scan[threadIdx.x - 1]
+  ] = threadIdx.x;
+}
+__syncthreads();
+\end{lstlisting}
+\end{minipage}
+\caption{Translating \texttt{scatter} from Futhark (left) to
+  CUDA (right).}
+\end{center}
+\end{figure}
+%%
+
+
+\subsection{Shared memory management}
