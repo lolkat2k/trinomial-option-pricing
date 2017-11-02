@@ -1,0 +1,72 @@
+\section{Options and interest rates}
+
+In this section we give a quick introduction to options and
+interest rates which we use to value them.
+
+\subsection{Interest rates}
+
+Introduce the interest rates we are using: the short rate,
+zero-coupon bonds, and the yield curve. (Maybe also the
+interest tree.)
+
+\subsection{What are options?}
+
+We normally distinguish between two styles of options,
+namely European and American style options. The following
+introduces European style options and they are also the only
+products that we price in this paper, but American style
+options are straightforwardly introduced in continuation
+hereof.
+
+An European call option is a financial contract in which the
+buyer of the contract pays the seller of the contract a
+premium for the right but not the obligation to buy some
+other asset when the contract expires. This other asset,
+also called the underlying asset, is specified in the
+contract and you can think of it as a single stock but in
+reality it can be any kind of asset.
+
+Being a bit more formal, we have that: The buyer and seller
+enter into the contract at time $t$, and the contract
+expires at time $T$, also called the maturity date. The
+payoff at time $T$ for the buyer of the call option is
+described as
+%
+\begin{equation}
+  C_T = \operatorname{max}\{0, S_T-K\}
+\end{equation}
+%
+in which $S_T$ is the price at time $T$ of the underlying
+asset and $K$ is the price at which the buyer of the call
+option is allowed to acquire the underlying asset, also
+called the strike price. Note, that the seller of the call
+option must own the underlying asset at time $T$ in case
+that the buyer decides to buy the asset!
+
+Almost dual to a European call option we have an European
+put option, in which the buyer of the put option has the
+right but not the obligation to sell the underlying
+asset. The payoff at time $T$ for the buyer of the put
+option is described as
+%
+\begin{equation}
+  P_T = \operatorname{max}\{0, K-S_T\} .
+\end{equation}
+%
+The put option is a bit more tricky because the terms buyer
+and seller is a bit confusing here: Opposite to the call
+option, the buyer of the put option owns the underlying
+asset. Then at maturity date, if the underlying asset is
+worth less than the strike price, the buyer will decide to
+sell the underlying asset to the seller of the put
+option. By selling for $K$ instead of $S_T$ the buyer of the
+put option obtains more value than if she had sold the
+underlying asset at the market price $S_T$.
+
+American style options allow the buyer to decide to exercise
+her right at any given point in time between time $t$ and
+$T$, in contrast to European style options where the buyers
+right can only be exercised at time $T$.
+
+
+\subsection{Option pricing using trinomial trees of interest rates}
