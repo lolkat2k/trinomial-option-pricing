@@ -26,13 +26,13 @@ information on Futhark SOACs see~\cite{futharkdoc}.
 The map operator is inherently data-parallel as one thread
 can apply the input function to one element in the array in
 parallel. However we need to be a little cautious 
-about is which threads that apply the input function. 
-Throughout the kernel we use "guards" e.g. "if-statements" 
+about which threads that apply the input function. 
+Throughout the kernel we use guards e.g. if-statements 
 to ensure that only the correct threads are working.
-Say we have 256 threads working on some array storing one value
-per option. This array could have length = \#options$< 256$. CUDA 
+Say we have $256$ threads working on some array storing one value
+per option. This array could have length less than $256$. CUDA 
 enables us to smoothly get around this with a guard that only
-lets threads with threadId $<$ \#options through.
+lets threads with thread-id less than the number of options through.
 We show an example of how a map translation is done in
 Figure~\ref{fig:trans_map}. Note, that the map operator 
 in Futhark is able to take multiple input arrays.
@@ -85,7 +85,7 @@ if the index array has duplicates.
 
 In absence of duplicate indices no thread reads from nor
 writes to the same indices in the value and destination
-arrays, respectively. This can also be seen as an in-place
+arrays, respectively. This can be seen as an in-place
 update. In Figure~\ref{fig:trans_scatter} we show how a
 scatter in Futhark can be translated to CUDA.
 %
@@ -128,7 +128,7 @@ seems like race-conditions, that we were not able to correct.
 
 The current implementation circumvent this problem by using
 a single thread performing a sequential block-level scan.
-Ofcourse this is not in the spirit of parallel programming,
+Of course this is not in the spirit of parallel programming,
 and should be regarded as a quick fix that allowed us to progress
 in getting the code to validate.
 
@@ -185,13 +185,13 @@ if (threadIdx.x < num_options) {
 %
 
 As seen in Figure~\ref{fig:shmem}, shared memory is placed 
-consecutively starting from address sh\_mem. Arrays are then just pointers
-to memory. Arrays of size w, such as tmp\_scan and sgm\_inds are defined
-first. After that follows arrays of size max\_options\_in\_chunk.
+consecutively starting from address \texttt{sh\_mem}: Arrays are then just pointers
+to memory. Arrays of size \texttt{w}, such as \texttt{tmp\_scan} and \texttt{sgm\_inds} are defined
+first. After that follows arrays of size \texttt{max\_options\_in\_chunk}.
 
-Arrays of size max\_options\_in\_chunk are then guarded with the
+Arrays of size \texttt{max\_options\_in\_chunk} are then guarded with the
 number of options in the chunk and indexed into with the corresponding
-option\_id.
+\texttt{option\_id}.
 
 %
 \begin{figure}[bt]
@@ -211,5 +211,8 @@ trinom_chunk_kernel<<<grid_dim, block_dim, sh_mem_size>>> ( ..)
 By virtue of our direct-translation strategy and Futharks
 immutability of data we have a lot of arrays in shared
 memory. (Note, that Futhark allows in-place updates by use
-of uniqueness types.) 
+of uniqueness types.) At one point all these arrays in shared
+memory caused the kernel invocation to actually not execute.
+One should also have the small shared memory capacity in mind
+when writing CUDA.
 

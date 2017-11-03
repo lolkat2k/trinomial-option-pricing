@@ -5,18 +5,18 @@ operators such as map and scatter. Using shared memory and guards,
 we have enabled multiple threads to read and write from the same
 shared memory.
 
-\subsection{Future work}
-
 Unfortunately the program does not validate at the current
 time of writing. For future work we should look into how
-the first loop calculates the Qs and the alphas.
-Right now our alphas become negative, which just seems wrong.
-We should take a look at how they are computed from tmpss,
-and try to figure out how alpha\_inds and alpha\_vals are
-used to update specific alphas. If we get that part right
+the first loop calculates the \texttt{Qs} and the \texttt{alphass}.
+Right now our \texttt{alphass} become negative, which just seems wrong.
+We should take a look at how they are computed from \texttt{tmpss},
+and try to figure out how \texttt{alpha\_inds} and \texttt{alpha\_vals} are
+used to update specific \texttt{alphass}. If we get that part right
 we should be very close to validating, as the workload of
 translating the second loop should be quite small compared
 to what we have already managed.
+
+\subsection{Future work}
 
 Despite the lack of an in-depth knowledge of derivatives
 pricing in practice we propose two possible optimization
