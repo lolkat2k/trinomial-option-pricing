@@ -136,11 +136,66 @@ programs running on GPUs, which becomes evident when the
 goal is fast programs.
 
 The CUDA programming model have an overall memory hierarchy
-in three levels:
+in three levels: thread-local memory, shared memory, and
+global memory. Thread-local memory we use only for a few
+variables per thread. Global memory is used for all
+read-only input arrays, and a single read-write array
+holding the alphas for all time steps for all options in a
+block. This latter array is both large relative to the other
+arrays in shared memory and rarely accessed, thus a good fit
+for the larger and slower global memory.
+
+In our program we have an intricate system of shared memory
+allocations, shown in Figure~\ref{fig:shmem}, due to the
+problem structure: There is a one-to-many relationship
+between the input arrays to the kernel, which are holding
+per-option data, to the number of threads working on each
+option. Because each thread needs access to its options data
+we allocate shared memory in which one thread per option
+writes common values into. These arrays are fairly small and
+frequently accessed.
 %
-\begin{description}
-  \item[thread-level]
-  \item[block-level]
-  \item[]
-\end{description}
+\begin{figure}[bt]
+\begin{center}
+\begin{lstlisting}
+extern __shared__ char sh_mem[];
+(..)
+volatile int* tmp_scan     = (int*) sh_mem;
+volatile int* sgm_inds     = (int*) (tmp_scan + w);
+(..)
+volatile float* Ps     = (float*) (is + max_options_in_chunk);
+volatile float* Xs     = (float*) (Ps  + max_options_in_chunk);
+(..)
+if (threadIdx.x < num_options) {
+  int option_id = options_in_chunk[threadIdx.x];
+  Xs[threadIdx.x] = strikes[option_id];
+  (..)
+}
+\end{lstlisting}
+\caption{Organising shared memory.}
+\label{fig:shmem}
+\end{center}
+\end{figure}
 %
+As seen in Figure~\ref{fig:shmem} we 
+
+%
+\begin{figure}[bt]
+\begin{center}
+\begin{lstlisting}
+unsigned int sh_mem_size =
+  (11 * w + 12 * max_options_in_chunk) * 4 +
+  sizeof(int) + (n_max + 1) * sizeof(float);
+(..)
+trinom_chunk_kernel<<<grid_dim, block_dim, sh_mem_size>>> ( ..)
+\end{lstlisting}
+\end{center}
+\caption{Allocation shared memory on the GPU from the host.}
+\label{fig:allocshmem}
+\end{figure}
+%
+By virtue of our direct-translation strategy and Futharks
+immutability of data we have a lot of arrays in shared
+memory. (Note, that Futhark allows in-place updates by use
+of uniqueness types.) 
+
