@@ -1,24 +1,22 @@
-\section{Options and interest rates}
+\section{Option pricing using interest rate trees}
 
-In this section we give a quick introduction to options and
-interest rates which we use to value them.
+In this section we give an overview of a concrete
+derivatives pricing model \cite{HullWhite94} in which a tree
+of short rates is computed and used to price a european
+style option. Before describing the pricing process we give
+a brief introduction to interest rates and options starting
+with the latter.
 
-\subsection{Interest rates}
-
-Introduce the interest rates we are using: the short rate,
-zero-coupon bonds, and the yield curve. (Maybe also the
-interest tree.)
-
-\subsection{What are options?}
+\subsection{Options}
 
 We normally distinguish between two styles of options,
-namely European and American style options. The following
-introduces European style options and they are also the only
-products that we price in this paper, but American style
+namely european and american style options. The following
+introduces european style options and they are also the only
+products that we price in this paper, but american style
 options are straightforwardly introduced in continuation
 hereof.
 
-An European call option is a financial contract in which the
+A european call option is a financial contract in which the
 buyer of the contract pays the seller of the contract a
 premium for the right but not the obligation to buy some
 other asset when the contract expires. This other asset,
@@ -69,4 +67,18 @@ $T$, in contrast to European style options where the buyers
 right can only be exercised at time $T$.
 
 
-\subsection{Option pricing using trinomial trees of interest rates}
+\subsection{Interest rates}
+
+The market interest structure of long rates is typically
+quoted in terms of yields on government issued securities,
+e.g., zero-coupon bonds.
+
+
+\subsection{Option pricing using interest rate trees}
+
+Because we need to discount prices in one period intervals
+we cannot directly use the market term structure. Given the
+current market term structure of long rates we construct a
+tree of possible future short rates that fits the current
+market term structure. Now, we are able to discount back the
+option price from its maturity date till today.

@@ -1,16 +1,35 @@
-\section{Translation from Futhark to CUDA}
+\section{Implementation in CUDA}
 
-How we actual did the translation along with thougths and
-decisions.
+The project task is to develop a CUDA implementation
+semantically equivalent to the flat Futhark version. This is
+simply a one-to-one translation from Futhark to CUDA of the
+function \texttt{trinomialChunk}, except for the fact that
+memory management in CUDA is explicit and thus need to be
+handled. This leads to optimization considerations as well.
+
+In the following we describe in detail both the simple
+translation task along with the memory management and
+optimization considerations.
 
 
-\subsection{Translation}
+\subsection{Translating from Futhark to CUDA}
 
-Write something about how we translate the \texttt{SOACS}
-from Futhark to CUDA.
+In this section we describe the translations of the Futhark
+second-order array combinators \texttt{map} and
+\texttt{scatter} to semantically equivalent CUDA
+code. Furthermore, we also address some problems with a
+block-level segmented scan that was provided to us. For more
+information on Futhark SOACs see~\cite{futharkdoc}.
 
-\subsubsection{Translating \texttt{maps}}
+\subsubsection{Translating \texttt{map}}
 
+The map operator is inherently data-parallel as one thread
+can apply the input function to one element in the array in
+parallel. Thus, the body of a map can simply be written
+inside the kernel. We show an example of how this
+translation is done in Figure~\ref{fig:trans_map}. Note,
+that the map operator in Futhark is able to take multiple
+input arrays.
 %
 \begin{figure}[bt]
 \begin{center}
@@ -18,11 +37,10 @@ from Futhark to CUDA.
 \begin{minipage}[t]{0.45\linewidth}
 \vspace{0pt}
 \begin{lstlisting}
-let map_lens =
-map (\m i ->
-  if i < optionsInChunk
-  then 2*m + 1
-  else 0
+let map_lens = map
+  (\m i -> if i < optionsInChunk
+           then 2*m + 1
+           else 0
   )
 ms (iota maxOptionsInChunk)
 \end{lstlisting}
@@ -31,24 +49,39 @@ ms (iota maxOptionsInChunk)
 \begin{minipage}[t]{0.45\linewidth}
 \vspace{0pt}
 \begin{lstlisting}
-if(threadIdx.x<num_options)
+if(threadIdx.x <
+   options_in_chunk)
 {
-  tmp_scan[threadIdx.x] =
+  map_lens[threadIdx.x] =
     2 * ms[threadIdx.x] + 1;
 } else {
-  tmp_scan[threadIdx.x] = 0;
+  map_lens[threadIdx.x] = 0;
 }
-__syncthreads();
 \end{lstlisting}
 \end{minipage}
-\caption{Transforming \texttt{maps} from Futhark (left) to
+\caption{Translating \texttt{maps} from Futhark (left) to
   CUDA (right).}
+\label{fig:trans_map}
 \end{center}
 \end{figure}
 %
 
+
+
+
 \subsubsection{Translating \texttt{scatter}}
 
+The scatter operator, written \lstinline{scatter arr is vs},
+writes the values of \lstinline{vs} at indexes
+\lstinline{is} to the same index in \lstinline{arr}. It is
+then inherently data-parallel assuming undefined behaviour
+if the index array has duplicates.
+
+In absence of duplicate indexes no thread reads from nor
+writes to the same indexes in the value and destination
+arrays, respectively. This can also be seen as an in-place
+update. In Figure~\ref{fig:trans_scatter} we show how a
+scatter in Futhark can be translated to CUDA.
 %
 \begin{figure}[bt]
 \begin{center}
@@ -56,33 +89,58 @@ __syncthreads();
 \begin{minipage}[t]{0.45\linewidth}
 \vspace{0pt}
 \begin{lstlisting}
-let sgm_inds = scatter
-  (replicate w 0)
-  len_inds
-  (iota maxOptionsInChunk)
+let alphass = scatter
+              alphass
+              alpha_inds
+              alpha_vals
 \end{lstlisting}
 \end{minipage}
 %% CUDA
 \begin{minipage}[t]{0.45\linewidth}
 \vspace{0pt}
 \begin{lstlisting}
-sgm_inds[threadIdx.x] = 0;
-__syncthreads();
-if(threadIdx.x < num_options &&
-   threadIdx.x > 0)
-{
-  sgm_inds[
-    tmp_scan[threadIdx.x - 1]
-  ] = threadIdx.x;
-}
-__syncthreads();
+alphass[threadIdx.x] =
+  alpha_vals[
+    alpha_inds[threadIdx.x]
+  ];
 \end{lstlisting}
 \end{minipage}
 \caption{Translating \texttt{scatter} from Futhark (left) to
   CUDA (right).}
+\label{fig:trans_scatter}
 \end{center}
 \end{figure}
 %%
 
 
+\subsubsection{Translating \texttt{scan}}
+
+Due to the problem structure we need a block-level segmented
+scan operator which we initially had been
+provided. Unfortunately, the handed out code caused what
+seems like race-conditions that we were not able to correct.
+
+The current implementation circumvent this problem by using
+a single thread performing a sequential block-level scan. Of
+course this is not in the spirit of the parallel programming
+spirit, and is merely a quick fix allowing us to progress
+and get the code to validate.
+
+
 \subsection{Shared memory management}
+
+Memory access and usage are almost always a concern and
+programming for GPUs is no exception. Scarcity of resources
+and penalty for suboptimal access can have a huge impact on
+programs running on GPUs, which becomes evident when the
+goal is fast programs.
+
+The CUDA programming model have an overall memory hierarchy
+in three levels:
+%
+\begin{description}
+  \item[thread-level]
+  \item[block-level]
+  \item[]
+\end{description}
+%
