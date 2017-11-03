@@ -25,18 +25,6 @@ __device__ float forward_helper(float M, float dr, float dt, float alphai,
 		      volatile float *QCopy, int beg_ind, int m, int i,
 		      int imax, int jmax, int j)
 {
-  /*
-  printf("M: %.4f\n", M);
-  printf("dr: %.4f\n", dr);
-  printf("dt: %.4f\n", dt);
-  printf("alphai: %.4f\n", alphai);
-  printf("beg_ind: %d\n", beg_ind);
-  printf("m: %d\n", m);
-  printf("i: %d\n", i);
-  printf("imax: %d\n", imax);
-  printf("jmax: %d\n", jmax);
-  printf("j: %d\n", j);
-  */
   float eRdt_u1 = exp(-((float)(j+1)*dr+alphai)*dt);
   float eRdt    = exp(-((float)(j)  *dr+alphai)*dt);
   float eRdt_d1 = exp(-((float)(j-1)*dr+alphai)*dt);
@@ -251,9 +239,7 @@ __global__ void trinom_chunk_kernel(
 
   int w = blockDim.x;
   int seq_len = n_max + 1;
-  if (threadIdx.x == 0) {
-    printf("blockIdx.x: %d\n", blockIdx.x);
-  }
+  
   int num_options = options_per_chunk[blockIdx.x];
   int *options_in_chunk = option_indices + blockIdx.x * max_options_in_chunk;
 
@@ -290,7 +276,6 @@ __global__ void trinom_chunk_kernel(
   // computing option id and values for this particular option
   if (threadIdx.x < num_options) {
     int option_id = options_in_chunk[threadIdx.x];
-    printf("threadID: %d  --  option_id: %d\n", threadIdx.x, option_id);
     
     Xs[threadIdx.x] = strikes[option_id];
     float T = maturities[option_id];
@@ -315,8 +300,6 @@ __global__ void trinom_chunk_kernel(
   unsigned int w_guard = 0;
   if (threadIdx.x == 0) {
     *w_guard_ = scanInc(ms, max_options_in_chunk);
-    printf("ms[0]: %d", ms[0]);
-    printf("num options er %d\n", num_options);
   }
   __syncthreads();
   w_guard = *w_guard_; 
@@ -364,54 +347,11 @@ __global__ void trinom_chunk_kernel(
   }
   __syncthreads();
 
-  /* Print flags and sgm_inds
-  __syncthreads();
-  if (threadIdx.x == 0) {
-    printf("flags:\n");
-    for (int i = 0; i < w; i++) {
-      printf("%d ", flags[i]);
-    }
-    printf("--------\n");
-    printf("sgm_inds:\n");
-    for (int i = 0; i < w; i++) {
-      printf("%d ", sgm_inds[i]);
-    }
-    printf("--------\n");
-    printf("ns:\n");
-    for (int i = 0; i < num_options; i++) {
-      printf("%d ", ns[i]);
-    }
-    printf("\n");
-  }
-  */
-  
-
-  // We copy the flags into tmp_scan because sgmScanIncBlock updates its flag array and we want to keep the flags array intact
   if (threadIdx.x == 0) {
     sgmScanIncInt(sgm_inds, flags, w);
   }
   __syncthreads();
   
-  // Print scanned sgm_inds
-  __syncthreads();
-  if (threadIdx.x == 0) {
-    printf("initial: scanned sgm_inds:\n");
-    for (int i = 0; i < w; i++) {
-      printf("%d ", sgm_inds[i]);
-    }
-    printf("\n");
-  } 
- 
-  // Print flags
-  __syncthreads();
-  if (threadIdx.x == 0) {
-    printf("flags: \n");
-    for (int i = 0; i < w; i++) {
-      printf("%d ", flags[i]);
-    }
-    printf("\n");
-  } 
-
   // make the segmented iota across all ms
   iota2mp1[threadIdx.x] = 1;
   __syncthreads();
@@ -441,18 +381,6 @@ __global__ void trinom_chunk_kernel(
   }
   __syncthreads();
 
-
-
-  if (threadIdx.x == 0) {
-    printf("Qs:\n");
-    for (int i = 0; i < w_guard; i++) {
-      printf("%.1f, ", Qs[i]);
-    }
-    printf("\n");
-  }
-  
-  __syncthreads();
-  
   // BEGIN FOR LOOP
   for (int i = 0; i < n_max; i++) {
     bool go_on = i < ns[sgm_inds[threadIdx.x]];
@@ -475,7 +403,6 @@ __global__ void trinom_chunk_kernel(
         if (j < (-imax) || (j > imax)) {
           Qs_[threadIdx.x] = 0.0; // Error
         } else {
-          if (i == 1) printf("Hello I am thread %d\n", threadIdx.x);
           int begind;
           if (sgm_ind == 0) {
             begind = 0;
@@ -488,9 +415,6 @@ __global__ void trinom_chunk_kernel(
                  alphass_[sgm_ind*seq_len+i],
                  QCopys_, begind, m,
                  i, imax, jmaxs[sgm_ind], j);
-          if (i == 0) {
-            printf("forward_helper returns: %.3f\n", tmp);
-          }
           Qs_[threadIdx.x] = tmp; 
         }
       }
@@ -554,22 +478,6 @@ __global__ void trinom_chunk_kernel(
     }
     __syncthreads();
     
-    /* Print Ps 
-    __syncthreads();
-    if (threadIdx.x == 0 && i == 0) {
-      printf("Ps:\n");
-      for (int i = 0; i < num_options; i++) {
-        printf("%.4f ", Ps[i]);
-      }
-      printf("--------\n");
-      printf("alpha_vals:\n");
-      for (int i = 0; i < num_options; i++) {
-        printf("%.2f ", alpha_vals[i]);
-      }
-      printf("\n");
-    }
-    */
-    
     // Update alpha_vals
     if(go_on) {
       if (threadIdx.x < num_options) {
@@ -578,17 +486,6 @@ __global__ void trinom_chunk_kernel(
     }
     __syncthreads();
     
-    // Print updated alpha_vals
-    __syncthreads();
-    if (threadIdx.x == 0 && i == 0) {
-      printf("alpha_vals after:\n");
-      for (int i = 0; i < num_options; i++) {
-        printf("%.2f ", alpha_vals[i]);
-      }
-      printf("\n");
-    }
-
-    __syncthreads();
     if(go_on) {
       if (threadIdx.x < num_options && i < ns[threadIdx.x]) {
         alpha_inds[threadIdx.x] = threadIdx.x * seq_len + (i+1);
@@ -600,21 +497,11 @@ __global__ void trinom_chunk_kernel(
 
     if(go_on) {
       if (threadIdx.x < num_options * seq_len) {
-        //printf("(idx: %d, alpha_inds: %d, alphavals: %.3f)\n", threadIdx.x, alpha_inds[threadIdx.x], alpha_vals[alpha_inds[threadIdx.x]]);
         alphass_[threadIdx.x] = alpha_vals[alpha_inds[threadIdx.x]];
       }
     }
-
-
-    // Print updated alpha_vals
     __syncthreads();
-    if (threadIdx.x == 0 && i < 5) {
-      printf("alphass_ after:\n");
-      for (int i = 0; i < num_options; i++) {
-        printf("%.2f ", alphass_[i]);
-      }
-      printf("\n");
-    }
+    
     // Qs''
     if(go_on) {
       if(threadIdx.x < w_guard) {
@@ -626,16 +513,6 @@ __global__ void trinom_chunk_kernel(
     }
   } //END OF FOR LOOP
   __syncthreads();
-
-  /* TEST QS!
-  if(threadIdx.x == 0) {
-    for(int i = 0; i < w; i++) {
-      printf("Qs: %.4f\n", Qs[i]);
-    } 
-  }
-  
-  __syncthreads(); 
-  */
 
   // Calls
   if(threadIdx.x < w_guard) {
@@ -709,16 +586,10 @@ __global__ void trinom_chunk_kernel(
   } // END OF FOR LOOP
   __syncthreads();
 
-  /* if(threadIdx.x >= num_options) {
-      d_output[-1] = 0.0; // out of range
-    } else {
-    }
-  */
   if (threadIdx.x < num_options) {
     int begind = (threadIdx.x == 0) ? 0 : scanned_lens[threadIdx.x - 1];
     int m_ind = begind + ms[threadIdx.x];
     d_output[threadIdx.x] = Calls[m_ind];
-    printf("jeg er thread number %d og jeg siger %.3f\n", threadIdx.x, Calls[m_ind]);
   }
   __syncthreads();
 }
@@ -772,9 +643,6 @@ int main()
   float M  = exp(-a * dt) - 1.0;
   int jmax = ((int)(-0.184 / M)) + 1;
   int m = jmax + 2;
-
-  printf("%d\n", n);
-  printf("%d\n", m);
 
   // start out with: (assuming that all options are equal)
   int n_max = n;
@@ -888,10 +756,11 @@ int main()
       printf("answer: %.5f\n", h_output[i]);
     }
   }
-  */
+  
   printf("answer: %.5f\n", h_output[0]);
   if (success) printf("VALID RESULT!\n");
   else         printf("INVALID RESULT!\n");
+  */
 
   free(h_output);
 
