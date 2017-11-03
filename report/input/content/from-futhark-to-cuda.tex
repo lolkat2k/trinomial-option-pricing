@@ -4,7 +4,7 @@ The project task is to develop a CUDA implementation
 semantically equivalent to the flat Futhark version. This is
 simply a one-to-one translation from Futhark to CUDA of the
 function \texttt{trinomialChunk}, except for the fact that
-memory management in CUDA is explicit and thus need to be
+memory management in CUDA is explicit and thus needs to be
 handled. This leads to optimization considerations as well.
 
 In the following we describe in detail both the simple
@@ -25,7 +25,7 @@ information on Futhark SOACs see~\cite{futharkdoc}.
 
 The map operator is inherently data-parallel as one thread
 can apply the input function to one element in the array in
-parallel. Thus, the body of a map can simply be written
+parallel. Therefore the body of a map can simply be written
 inside the kernel. We show an example of how this
 translation is done in Figure~\ref{fig:trans_map}. Note,
 that the map operator in Futhark is able to take multiple
@@ -72,13 +72,13 @@ if(threadIdx.x <
 \subsubsection{Translating \texttt{scatter}}
 
 The scatter operator, written \lstinline{scatter arr is vs},
-writes the values of \lstinline{vs} at indexes
-\lstinline{is} to the same index in \lstinline{arr}. It is
+writes the values of \lstinline{vs} at indices
+\lstinline{is} to the same indices in \lstinline{arr}. It is
 then inherently data-parallel assuming undefined behaviour
 if the index array has duplicates.
 
-In absence of duplicate indexes no thread reads from nor
-writes to the same indexes in the value and destination
+In absence of duplicate indices no thread reads from nor
+writes to the same indices in the value and destination
 arrays, respectively. This can also be seen as an in-place
 update. In Figure~\ref{fig:trans_scatter} we show how a
 scatter in Futhark can be translated to CUDA.
@@ -115,21 +115,21 @@ alphass[threadIdx.x] =
 
 \subsubsection{Translating \texttt{scan}}
 
-Due to the problem structure we need a block-level segmented
-scan operator which we initially had been
-provided. Unfortunately, the handed out code caused what
-seems like race-conditions that we were not able to correct.
+When calculating interest rate trees it seems very preferable to
+have a block-level segmented scan operator at your disposal.
+One was provided for us, but unfortunately the handed out code caused what
+seems like race-conditions, that we were not able to correct.
 
 The current implementation circumvent this problem by using
-a single thread performing a sequential block-level scan. Of
-course this is not in the spirit of the parallel programming
-spirit, and is merely a quick fix allowing us to progress
-and get the code to validate.
+a single thread performing a sequential block-level scan.
+Ofcourse this is not in the spirit of parallel programming,
+and should be regarded as a quick fix that allowed us to progress
+in getting the code to validate.
 
 
 \subsection{Shared memory management}
 
-Memory access and usage are almost always a concern and
+Memory access and memory usage are almost always a concern and
 programming for GPUs is no exception. Scarcity of resources
 and penalty for suboptimal access can have a huge impact on
 programs running on GPUs, which becomes evident when the

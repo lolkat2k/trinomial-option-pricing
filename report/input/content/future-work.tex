@@ -1,7 +1,17 @@
 \section{Future work}
 
+Unfortunately the program does not validate at the current
+time of writing. For future work we should look into how
+the first loop calculates the Qs and the alphas.
+Right now our alphas become negative, which just seems wrong.
+We should take a look at how they are computed from tmpss,
+and try and figure out how alpha\_inds and alpha\_vals are
+used to update specific alphas. If we get that part right
+we are very close to validating as the second loop is really
+tiny compared to what we have already implemented.
+
 Despite the lack of an in-depth knowledge of derivatives
-pricing in practice we propose two possible optimisation
+pricing in practice we propose two possible optimization
 strategies that could be investigated. Both proposals are
 based on splitting the described pricing process into two
 steps: 1) compute the tree of short rates, and 2) compute
@@ -15,7 +25,7 @@ generating a new semantically equivalent but faster
 program. Data specialisation on the other hand, stores the
 precomputed values in a data structure which is then passed
 to a modified version of the original program that is able
-to use data structure. Using the latter technique, if some
+to use the data structure. Using the latter technique, if some
 range of interest dependent derivatives use the same tree of
 short rates, we need only to compute this tree once. With
 the former technique faster pricing programs could be
