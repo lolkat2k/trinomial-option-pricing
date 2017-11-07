@@ -1,0 +1,150 @@
+\documentclass{beamer}
+
+%%% Title page
+\title{
+  {\bfseries Trinomial Option Pricing}
+}
+
+\subtitle{
+  Programming Massively Parallel Hardware, Fall 2017
+}
+
+\author
+{
+  Hjalte Abelskov \and Sune Hellfritzsch \and Dolapo Olunlade
+}
+
+\institute
+{
+  Department of Computer Science, University of Copenhagen
+}
+
+\date
+{
+  November 8, 2017 %\today
+}
+
+\usepackage{url}
+
+\usepackage{mathpazo}
+\renewcommand{\ttdefault}{pcr}
+
+\usepackage{csquotes}
+\usepackage{xcolor}
+\usepackage{booktabs}
+
+\usepackage{mathtools}
+\mathtoolsset{showonlyrefs}
+
+
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes,fit,arrows}
+
+\usepackage{listings}
+%\lstset{language=Haskell} % extending the haskell language definition
+\lstset{
+  basicstyle=\ttfamily,
+  morekeywords={fun, reduce},
+  breaklines=true, % breaks lines into two if they are too long
+  xleftmargin=\parindent,
+  xrightmargin=.5cm,
+  numbers=none,
+  numberstyle=\scriptsize,
+  numbersep=6pt,
+  frame=lines,
+%% Pertaining to surrounding environment
+  aboveskip=8pt,
+  belowskip=8pt
+}
+
+
+%%% Layout
+%% TOC
+\usepackage{scalerel}
+\def\sq{\mathbin{\scalerel*{\strut\rule[-0.15ex]{2ex}{2ex}}{\cdot}}}
+
+\defbeamertemplate{section in toc}{square unnumbered}{%
+  \leavevmode\leftskip=1.75ex%
+  \llap{{\color{black}$\sq$}}%
+  \kern1.5ex\inserttocsection\par}
+
+\setbeamertemplate{section in toc}[square unnumbered]
+\setbeamercolor{section in toc}{fg=black}
+
+%% Remove navigation symbols
+\beamertemplatenavigationsymbolsempty
+
+%% itemize
+\defbeamertemplate{itemize item}{blsq}{\tiny\raise1.25pt\hbox{$\blacksquare$}}
+\setbeamertemplate{itemize item}[blsq]
+\setbeamercolor{local structure}{fg=black}
+\setbeamercolor{itemize item}{fg=black}
+
+%% description
+\setbeamerfont{description item}{series=\bfseries}
+
+
+%% Defining some colors
+\usepackage{xcolor}
+\definecolor{light-gray}{gray}{0.90} % 0.95 is the shade of grey that stack exchange uses
+\definecolor{light-gray2}{gray}{0.80} % 0.95 is the shade of grey that stack exchange uses
+
+%% Text
+\setbeamercolor{title}{fg=black} %% Title in title page
+%\setbeamercolor{subtitle}{fg=black} %% Subtitle in title page
+
+%% Frame title mods
+\setbeamercolor{frametitle}{fg=black} %% Frame title on each frame
+\setbeamerfont{frametitle}{series=\bfseries}
+
+%% Normal text mods
+\setbeamercolor{normaltext}{fg=black} %% Normal text
+
+%% Blocks
+\setbeamercolor{block title}{fg=black} %% Block title text
+\setbeamercolor{block title}{bg=light-gray2} %% Block title background
+\setbeamercolor{block body}{bg=light-gray} %% Block body background
+
+%%% Trying out some custom headers
+%\setbeamertemplate{frametitle}
+%{
+%  \insertsection \ -- \insertframetitle
+%}
+
+%\usepackage{tikz}
+%\setbeamertemplate{frametitle}
+%{
+%    \begin{beamercolorbox}[wd=\paperwidth, ht=0.95cm]{frametitle}
+%        \begin{tikzpicture}
+%            \path[fill=black] (0, \paperheight) rectangle (\paperwidth, \paperheight-1cm);
+%            \node[right, light-gray2] at (0, \paperheight-0.5cm)
+%            {\hspace{0.25cm}\color{white}\Large\textbf{\insertsection \ -- \insertframetitle}};
+%        \end{tikzpicture}
+%    \end{beamercolorbox}
+%}
+
+%% Source code listings
+% http://tug.ctan.org/macros/latex/contrib/listings/listings.pdf
+\usepackage{listings}
+\lstset{language=Haskell} % extending the haskell language definition
+\lstset{
+  basicstyle=\ttfamily,
+  morekeywords={fun, reduce},
+  breaklines=true, % breaks lines into two if they are too long
+  xleftmargin=\parindent,
+  xrightmargin=.5cm,
+  numbers=left,
+  numberstyle=\scriptsize,
+  numbersep=6pt,
+  frame=lines,
+%% Pertaining to surrounding environment
+  aboveskip=8pt,
+  belowskip=8pt
+}
+
+
+% Words we want to customize
+\newcommand{\soac}[0]{\textsc{soac}}
+\newcommand{\astree}[0]{\textsc{ast}}
+\newcommand{\code}[1]{\texttt{#1}}
+

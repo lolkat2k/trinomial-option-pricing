@@ -1,0 +1,70 @@
+\section{Part I: Option pricing using interest rate trees}
+
+%% options and interest rate trees
+\begin{frame}
+  \frametitle{What are options?}
+
+Types of options: Call and put options.
+
+(The following will focus on european call options, but the
+approach we present applies to put options as well.)
+
+Informally: Options are the right but not the obligation to
+buy some asset for some price at expiration date.
+
+Formally:
+
+Given the following:
+%
+\begin{itemize}
+  \item Price of underlying asset: $S$
+  \item Strike price: $K$
+  \item Maturity date: $T$
+\end{itemize}
+%
+Then an option is a contract between two parties, such that
+the buyer has the right to buy the underlying asset at price
+$K$ when the contract expires at time $T$. The buyers payoff
+at time $T$ can be described as:
+%
+\begin{equation}
+  \operatorname{max} \{ 0, S - K \}
+\end{equation}
+%
+\end{frame}
+
+\begin{frame}
+  \frametitle{What are interest rates?}
+Include:
+%
+\begin{itemize}
+  \item current market term structure (yields on bonds?)
+  \item the short rate tree
+  \item branching process (exhibit 1, 2, 3)
+  \item alphas, qs
+  \item the tree construction two stage process: 1) compute
+    simple tree, 2) introduce time-varying drift.
+\end{itemize}
+%
+\end{frame}
+
+\begin{frame}
+  \frametitle{Option pricing using interest rate trees}
+
+  At expiration date $T$ the price of the option is equal to
+  the payoff for the buyer, i.e.,
+  %
+  \begin{equation}
+    \operatorname{max} \{ 0, S - K \}
+  \end{equation}
+  %
+  thus we know the price of the option at all possible
+  states in expiration (less than or equal $2n + 1$).
+
+  Then, for each node at time $t_{n-1}$ we can compute the
+  price at one time-step earlier, by discounting the price
+  one time-step in the future back (times probabilities).
+
+  (Emphasis on probabilites and link to tree.)
+
+\end{frame}

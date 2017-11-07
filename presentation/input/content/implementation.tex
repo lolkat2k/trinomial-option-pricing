@@ -1,0 +1,56 @@
+\section{Part II: Implementation in CUDA}
+
+%% translating map
+\begin{frame}[fragile]
+  \frametitle{map}
+%
+Inherently parallel.
+%
+\begin{lstlisting}
+let map_lens = map  (\m i -> if i < optionsInChunk then 2*m + 1 else 0)
+  ms (iota maxOptionsInChunk)
+\end{lstlisting}
+%
+\end{frame}
+
+%% translating scatter
+\begin{frame}[fragile]
+  \frametitle{scatter}
+%
+Inherently parallel (assume no duplicates in index?).
+%
+%
+\begin{lstlisting}
+let alphass = scatter
+  alphass
+  alpha_inds
+  alpha_vals
+\end{lstlisting}
+%
+\end{frame}
+
+%% translating scan
+\begin{frame}
+  \frametitle{scan}
+%
+Something.
+%
+\end{frame}
+
+%% memory management
+\begin{frame}
+  \frametitle{Memory management}
+  %
+  \begin{itemize}
+    \item Memory hierarchies in the CUDA programming model
+    \item How we use the different levels in our program
+    \item (Shared mem. per thread?)
+    \item Optimisation:
+      %
+      \begin{itemize}
+        \item Allocation
+        \item Access / pattern (tiling-ish)
+      \end{itemize}
+      %
+  \end{itemize}
+\end{frame}

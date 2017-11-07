@@ -1,0 +1,12 @@
+\frametitle{scatter}
+%
+Inherently parallel (assume no duplicates in index?).
+%
+%
+\begin{lstlisting}
+let alphass = scatter
+  alphass
+  alpha_inds
+  alpha_vals
+\end{lstlisting}
+%

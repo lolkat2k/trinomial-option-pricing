@@ -1,0 +1,25 @@
+\input{input/preamble}
+
+\begin{document}
+
+%%% title page
+\frame{\titlepage}
+
+%%% table of contents
+%\frame{\tableofcontents}
+
+%%% content
+%% Show agenda/toc before each section -- kind of hacky way to do it
+\AtBeginSection[]
+{
+ \begin{frame}<beamer>
+ \frametitle{Agenda}
+ \tableofcontents[currentsection]
+ \end{frame}
+}
+\input{input/content/introduction}
+\input{input/content/option-pricing}
+\input{input/content/implementation}
+\input{input/content/future-work}
+
+\end{document}
