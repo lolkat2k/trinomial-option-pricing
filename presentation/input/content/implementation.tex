@@ -39,14 +39,16 @@ let alphass = scatter
 \begin{frame}[fragile]
   \frametitle{scan}
 %
-We are only concerned with inclusive scans for this particular project. 
-Use a segmented scan to flatten and apply scan to all elements in lists of lists.
+\begin{itemize}
+  \item We are only concerned with inclusive scans for this particular project.
+  \item Use a segmented scan to flatten and apply scan to all elements in a list of lists.
+\end{itemize}
 %
 %
 \begin{lstlisting}
 xs = [[1,3,5,10],[2,0,4]]
 flags = [4,0,0,0,3,0,0]
-scan (+) xs flags = [1, 4, 9, 19, 2, 2, 6]
+sgmScan + flags xs = [1, 4, 9, 19, 2, 2, 6]
 \end{lstlisting}
 \end{frame}
 
