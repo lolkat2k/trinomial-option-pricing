@@ -2,12 +2,17 @@
 
 %% translating map
 \begin{frame}[fragile]
-  \frametitle{map}
+  \frametitle{map f xs ys}
 %
-Inherently parallel.
+Inherently parallel operator, as each thread can apply the same input
+function to different data.
 %
 \begin{lstlisting}
-let map_lens = map  (\m i -> if i < optionsInChunk then 2*m + 1 else 0)
+let map_lens =
+  map (\m i ->
+    if i < optionsInChunk
+    then 2 * m + 1
+    else 0)
   ms (iota maxOptionsInChunk)
 \end{lstlisting}
 %
@@ -15,26 +20,34 @@ let map_lens = map  (\m i -> if i < optionsInChunk then 2*m + 1 else 0)
 
 %% translating scatter
 \begin{frame}[fragile]
-  \frametitle{scatter}
+  \frametitle{scatter as is vs}
 %
-Inherently parallel (assume no duplicates in index?).
+Inherently parallel (assume no duplicates in index?) as each thread
+handles the write of one value.
 %
 %
 \begin{lstlisting}
 let alphass = scatter
-  alphass
-  alpha_inds
-  alpha_vals
+  alphass          -- size: n
+  alpha_inds       -- size: k
+  alpha_vals       -- size: k
 \end{lstlisting}
 %
 \end{frame}
 
 %% translating scan
-\begin{frame}
+\begin{frame}[fragile]
   \frametitle{scan}
 %
-Something.
+We are only concerned with inclusive scans for this particular project. 
+Use a segmented scan to flatten and apply scan to all elements in lists of lists.
 %
+%
+\begin{lstlisting}
+xs = [[1,3,5,10],[2,0,4]]
+flags = [4,0,0,0,3,0,0]
+scan (+) xs flags = [1, 4, 9, 19, 2, 2, 6]
+\end{lstlisting}
 \end{frame}
 
 %% memory management
