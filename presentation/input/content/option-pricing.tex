@@ -1,20 +1,19 @@
-\section{Part I: Option pricing using interest rate trees}
+\section{Part II: Option pricing using interest rate trees}
+
+\newcommand{\tabitem}{~~\llap{\textbullet}~~}
+
 
 %% options and interest rate trees
 \begin{frame}
-  \frametitle{What are options?}
-
-Types of options: Call and put options.
-
-(The following will focus on european call options, but the
-approach we present applies to put options as well.)
-
-Informally: Options are the right but not the obligation to
-buy some asset for some price at expiration date.
-
-Formally:
-
-Given the following:
+\frametitle{What are options?}
+%
+%
+\begin{block}{Call options (informally)}
+An option is the right but not the obligation to buy an
+asset for a price at a time in the future.
+\end{block}
+%
+Define the following:
 %
 \begin{itemize}
   \item Price of underlying asset: $S$
@@ -22,49 +21,112 @@ Given the following:
   \item Maturity date: $T$
 \end{itemize}
 %
-Then an option is a contract between two parties, such that
-the buyer has the right to buy the underlying asset at price
-$K$ when the contract expires at time $T$. The buyers payoff
-at time $T$ can be described as:
 %
+\begin{block}{Call options (formally)}
+An option is a financial contract between two parties, such
+that the buyer has the right but not the obligation to buy
+the underlying asset at price $K$, when the contract expires
+at time $T$. The time $T$ price can be described as:
 \begin{equation}
-  \operatorname{max} \{ 0, S - K \}
+  C_T = \operatorname{max} \{ 0, S - K \}
 \end{equation}
-%
+\end{block}
 \end{frame}
 
+
 \begin{frame}
-  \frametitle{What are interest rates?}
-Include:
+  \frametitle{Interest rates}
 %
+  \begin{block}{Objective: Tree of short rates}
+    Compute tree of short rates given current structure of
+    long rates.
+  \end{block}
+
+What is the current structure of long rates?
 \begin{itemize}
-  \item current market term structure (yields on bonds?)
-  \item the short rate tree
-  \item branching process (exhibit 1, 2, 3)
-  \item alphas, qs
-  \item the tree construction two stage process: 1) compute
-    simple tree, 2) introduce time-varying drift.
+\item Usually quoted as the yields on zero-coupon bonds with
+  different (often long) time to maturity.
 \end{itemize}
 %
+\vspace{0.25cm}
+\hrule
+\vspace{0.25cm}
+%
+\begin{itemize}
+\item Need rates for shorter time periods.
+\item Trinomial-tree of interest rates [HW94]. Two-stage
+  process:
+\begin{enumerate}
+  \item Compute tree with nodes equidistant in $r$ and $t$.
+  \item Introduce time-varying drift.
+\end{enumerate}
+%
+\end{itemize}
 \end{frame}
 
 \begin{frame}
+  \frametitle{Interest rates}
+  %
+\textbf{Step 1:} Compute tree with nodes equidistant in $r$ and $t$.
+%
+\begin{enumerate}
+\item Define $(i, j)$ as the node for which $t = i \Delta t$
+  and $r = j \Delta r$.
+\item Define boundaries (jmax and jmin).
+\item Define probabilites $P_u$, $P_m$, and $P_d$ (depends
+  only on $j$).
+\end{enumerate}
+%
+\vspace{0.25cm}
+\hrule
+\vspace{0.25cm}
+%
+\textbf{Step 2:} Introduce time-varying drift.
+\begin{enumerate}
+\item Set $Q_{(0,0)} = 1$ and $\alpha_{0}$ to initial
+  $\Delta t$ period interest rate (interpolate if needed).
+\item Compute $Q_{(1,1)}, Q_{(1,0)}$ and $Q_{(1,-1)}$.
+\item Compute $\alpha_{1}$.
+  %
+  \begin{itemize}
+  \item Discount value of bond from $2\Delta t$ to $\Delta
+    t$ (interpolate if needed).
+  \item Use $Q$s to discount from $\Delta t$ to 0.
+  \item Should equal price of zero maturing at time $2\Delta
+    t$: Solve for $\alpha_{1}$.
+  \end{itemize}
+  %
+\item Shift rates at time $i = 1$ by $\alpha_{1}$.
+\item Repeat steps 2-4 (closed formulas, dep. on previous values).
+\end{enumerate}
+%
+\end{frame}
+
+
+\begin{frame}[fragile]
   \frametitle{Option pricing using interest rate trees}
-
-  At expiration date $T$ the price of the option is equal to
-  the payoff for the buyer, i.e.,
   %
+  The time $T$ price of a call option is given by
   \begin{equation}
-    \operatorname{max} \{ 0, S - K \}
+    C_T = \operatorname{max} \{ 0, S - K \}
   \end{equation}
+  i.e, we know all time $T$ option prices (at most $2n+1$
+  prices).
+\vspace{0.25cm}
+\hrule
+\vspace{0.25cm}
+  The present value of any cash flow is found by discounting
+  the cash flow back, i.e.,
   %
-  thus we know the price of the option at all possible
-  states in expiration (less than or equal $2n + 1$).
-
-  Then, for each node at time $t_{n-1}$ we can compute the
-  price at one time-step earlier, by discounting the price
-  one time-step in the future back (times probabilities).
-
-  (Emphasis on probabilites and link to tree.)
-
+  \begin{enumerate}
+  \item Compute prices at time $t_n = T$ (known).
+  \item Discount cash flow back from $t_n$ to $t_{n-1}$,
+    using probabilites and short rates (with drift!).
+  \item Repeat step 2, i.e., discount cash flow one $\Delta
+    t$-period back at a time until you reach $t_0$.
+  \item Now you have the current price of the option which
+    is consistent with the current market term structure
+    (long rates).
+  \end{enumerate}
+  %
 \end{frame}
