@@ -1,4 +1,36 @@
-\section{Part II: Implementation in CUDA}
+\section{Part III: Implementation in CUDA}
+
+\begin{frame}
+  \frametitle{Overall implementation strategy}
+  %
+  \begin{itemize}
+    \item Tree construction and option pricing is a two-step
+      process:
+      %
+      \begin{enumerate}
+      \item Qs and alphas:
+
+        values at $i$ depends on values at $i-1$
+        $\Rightarrow$ forward iteration.
+      \item Option prices:
+
+        values at $i$ depends on values at $i+1$
+        $\Rightarrow$ backward iteration.
+      \end{enumerate}
+      %
+    \item At each $i$ let each $j$ in tree correspond to one
+      thread.
+    \item Use 1-dim. iter. space (threads) and stack
+      options.
+    \item Perform forward- and back iteration using two
+      convergence loops -- ensures that dependencies are not
+      violated.
+    \item Compute interest rates on the fly to minimize
+      memory usage.
+  \end{itemize}
+  %
+\end{frame}
+
 
 %% translating map
 \begin{frame}[fragile]

@@ -1,6 +1,6 @@
-\section{Part III: Conclusion and future work}
+\section{Part IV: Conclusion and future work}
 
-%% 
+%%
 \begin{frame}
   \frametitle{Conclusion}
 %
@@ -8,4 +8,33 @@
   \item Translation of inherently data-parallel operators
 \end{itemize}
 %
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Future work}
+  %
+  \begin{itemize}
+  \item Investigate optimizations wrt. the interest rate
+    tree:
+    %
+    \begin{itemize}
+      \item alphas as input to program -- tradeoff between
+        run-time computations and memory accesses (load). (Data spec.)
+      \item inline alphas in program and loop-unroll --
+        space-time tradeoff. (Partial evaluation.)
+      \item other ideas?
+    \end{itemize}
+    %
+  \item Investigate optimizations wrt. the
+    \textbf{computation} of the interest rate tree
+    %
+    \begin{itemize}
+    \item Model two term structures simultaneously.
+    \end{itemize}
+    %
+  \item Define scheme for use in practice -- compute rates
+    once, but similar derivatives many times.
+  \end{itemize}
+  %
 \end{frame}
