@@ -48,6 +48,16 @@ let map_lens =
   ms (iota maxOptionsInChunk)
 \end{lstlisting}
 %
+\begin{lstlisting}
+if (threadIdx.x < maxOptionsInChunk) {
+  if (threadIdx.x < optionsInChunk) {
+    map_lens[threadIdx.x] =
+            2 * ms[threadIdx.x] + 1;
+  } else {
+    map_lens[threadIdx.x] = 0;
+  }
+}
+\end{lstlisting}
 \end{frame}
 
 %% translating scatter
@@ -65,22 +75,10 @@ let alphass = scatter
   alpha_vals       -- size: k
 \end{lstlisting}
 %
-\end{frame}
-
-%% translating scan
-\begin{frame}[fragile]
-  \frametitle{scan}
-%
-\begin{itemize}
-  \item We are only concerned with inclusive scans for this particular project.
-  \item Use a segmented scan to flatten and apply scan to all elements in a list of lists.
-\end{itemize}
-%
-%
 \begin{lstlisting}
-xs = [[1,3,5,10],[2,0,4]]
-flags = [4,0,0,0,3,0,0]
-sgmScan + flags xs = [1, 4, 9, 19, 2, 2, 6]
+if (threadIdx.x < optionsInChunk) {
+  alphass[alpha_inds[threadIdx.x]] = alpha_vals[threadIdx.x];
+}
 \end{lstlisting}
 \end{frame}
 
@@ -89,15 +87,16 @@ sgmScan + flags xs = [1, 4, 9, 19, 2, 2, 6]
   \frametitle{Memory management}
   %
   \begin{itemize}
-    \item Memory hierarchies in the CUDA programming model
-    \item How we use the different levels in our program
-    \item (Shared mem. per thread?)
-    \item Optimisation:
+    \item CUDAs memory hierarchy is split in three parts:
       %
       \begin{itemize}
-        \item Allocation
-        \item Access / pattern (tiling-ish)
+        \item Per-thread local memory
+        \item Per-block shared memory
+        \item Global memory
       \end{itemize}
       %
+    \item For each thread CUDA provides 8-10 words of shared memory.
+    \item We save 9 arrays of size w storing 32bit floats.
+    \item Arrays of size w are stored first so that memory is aligned.
   \end{itemize}
 \end{frame}
