@@ -1,8 +1,25 @@
-#include <stdio.h> // gettimeofday
+#include <stdlib.h> // gettimeofday
+#include <stdio.h>
 #include <math.h>  // exp
-#include <algorithm> // max
-#include "ScanKernels.cu.h"
-#include "ScanHost.cu.h"
+#include <sys/time.h>
+
+//#include <algorithm> // max
+//#include "ScanKernels.cu.h"
+//#include "ScanHost.cu.h"
+
+/* Get difference between timeintervals (from lecture notes) */
+int timeval_subtract(struct timeval* result,
+                     struct timeval* t2,
+                     struct timeval* t1)
+{
+  unsigned int resolution=1000000;
+  long int diff = (t2->tv_usec + resolution * t2->tv_sec) -
+    (t1->tv_usec + resolution * t1->tv_sec);
+  result->tv_sec = diff / resolution;
+  result->tv_usec = diff % resolution;
+
+  return (diff<0);
+}
 
 /* Probability measures for tree construction */
 // Exhibit 1A (-jmax < j < jmax)
@@ -72,7 +89,7 @@ __device__ float forward_helper(float M, float dr, float dt, float alphai,
     pd = PD_A(j + 1, M);
     pm = PM_A(j, M);
     pu = PU_A(j - 1, M);
-    return 
+    return
       pd_c*QCopy[beg_ind+j+2+m]*eRdt_u2 +
       pd*QCopy[beg_ind+j+1+m]*eRdt_u1 +
       pm*QCopy[beg_ind+j+m]*eRdt +
@@ -84,7 +101,7 @@ __device__ float forward_helper(float M, float dr, float dt, float alphai,
     pd = PD_A(j + 1, M);
     pm = PM_A(j,     M);
     pu = PU_A(j - 1, M);
-    return 
+    return
       pd*QCopy[beg_ind+j+1+m]*eRdt_u1 +
       pm*QCopy[beg_ind+j+m]*eRdt +
       pu*QCopy[beg_ind+j-1+m]*eRdt_d1 +
@@ -117,8 +134,8 @@ __device__ float forward_helper(float M, float dr, float dt, float alphai,
 
 
 /* backward propagation helper */
-__device__ float backward_helper(float X, float M, float dr, float dt, 
-		       float alphai, volatile float *CallCopy, int beg_ind, int m, 
+__device__ float backward_helper(float X, float M, float dr, float dt,
+		       float alphai, volatile float *CallCopy, int beg_ind, int m,
 		       int i, int jmax, int j)
 {
   float eRdt = exp(-((float)(j)*dr + alphai)*dt);
@@ -171,7 +188,7 @@ __device__ float backward_helper(float X, float M, float dr, float dt,
   return res;
 }
 
-__device__ int scanInc(volatile int* ms, int ms_length)
+__device__ int reduceInt(volatile int* ms, int ms_length)
 {
   int res = 0;
   for (int i = 0; i < ms_length; i++) {
@@ -182,9 +199,18 @@ __device__ int scanInc(volatile int* ms, int ms_length)
   return res;
 };
 
-__device__ void sgmScanIncFloat(volatile float* input, volatile int* flags, int n)
+__device__ void scanIncInt(volatile int* input, int n)
 {
-  float acc = 0.0;
+  int acc = 0;
+  for(int i=0; i<n; i++) {
+    acc += input[i];
+    input[i] = acc;
+  }
+}
+
+__device__ void sgmScanIncInt(volatile int* input, volatile int* flags, int n)
+{
+  int acc = 0;
 
   for (int i = 0; i < n; i++) {
     if(flags[i] > 0) {
@@ -197,9 +223,9 @@ __device__ void sgmScanIncFloat(volatile float* input, volatile int* flags, int 
   }
 }
 
-__device__ void sgmScanIncInt(volatile int* input, volatile int* flags, int n)
+__device__ void sgmScanIncFloat(volatile float* input, volatile int* flags, int n)
 {
-  int acc = 0;
+  float acc = 0.0;
 
   for (int i = 0; i < n; i++) {
     if(flags[i] > 0) {
@@ -227,7 +253,7 @@ __global__ void trinom_chunk_kernel(
 
                      int n_max,    // maximum number of time steps
                      int *num_terms,
-                     
+
                      int yc_count, // number of yield curves
                      float *yield_curve_P,
                      float *yield_curve_t,
@@ -239,7 +265,7 @@ __global__ void trinom_chunk_kernel(
 
   int w = blockDim.x;
   int seq_len = n_max + 1;
-  
+
   int num_options = options_per_chunk[blockIdx.x];
   int *options_in_chunk = option_indices + blockIdx.x * max_options_in_chunk;
 
@@ -249,13 +275,11 @@ __global__ void trinom_chunk_kernel(
   volatile int* flags        = (int*) (iota2mp1 + w);
   volatile float* Qs         = (float*) (flags + w);
   volatile float* Qs_        = (float*) (Qs + w);
-  volatile float* QCopys_    = (float*) (Qs_ + w);
-  volatile float* tmpss      = (float*) (QCopys_ + w);
+  volatile float* tmpss      = (float*) (Qs_ + w);
   volatile float* Calls      = (float*) (tmpss + w);
   volatile float* Calls_     = (float*) (Calls + w);
-  volatile float* CallCopys_ = (float*) (Calls_ + w);
-  
-  volatile float* alpha_vals = (float*) (CallCopys_ + max_options_in_chunk);
+
+  volatile float* alpha_vals = (float*) (Calls_ + w);
   volatile int* scanned_lens = (int*) (alpha_vals + max_options_in_chunk);
   volatile int* is           = (int*) (scanned_lens + max_options_in_chunk);
   volatile float* Ps     = (float*) (is + max_options_in_chunk);
@@ -267,16 +291,21 @@ __global__ void trinom_chunk_kernel(
   volatile int* imaxs    = (int*) (Ms + max_options_in_chunk);
   volatile int* jmaxs    = (int*) (imaxs + max_options_in_chunk);
   volatile int* ms       = (int*) (jmaxs + max_options_in_chunk);
-  
+
   volatile int* w_guard_ = (int*) (ms + max_options_in_chunk);
-  volatile int* alpha_inds   = (int*) (w_guard_ + sizeof(int));
 
   float *alphass_ = alphass + blockIdx.x * num_options * (seq_len);
+
+  /*
+  if (threadIdx.x == 0 || threadIdx.x == 109 || threadIdx.x == 218) {
+    printf("blockId: %d, num_opt: %d, seq_len: %d\n", blockIdx.x, num_options, seq_len);
+    printf("alphass_ %p :\n", alphass_);
+  }
+  */
 
   // computing option id and values for this particular option
   if (threadIdx.x < num_options) {
     int option_id = options_in_chunk[threadIdx.x];
-    
     Xs[threadIdx.x] = strikes[option_id];
     float T = maturities[option_id];
     int n    = num_terms[option_id];
@@ -299,38 +328,52 @@ __global__ void trinom_chunk_kernel(
 
   unsigned int w_guard = 0;
   if (threadIdx.x == 0) {
-    *w_guard_ = scanInc(ms, max_options_in_chunk);
+    *w_guard_ = reduceInt(ms, max_options_in_chunk);
   }
   __syncthreads();
-  w_guard = *w_guard_; 
+  w_guard = *w_guard_;
 
-  int tmp;
+
+  // print tree sizes
+  /*
+  if(threadIdx.x == 0) {
+    printf("ms[0]: %d\n", ms[0]);     // 25
+    printf("w_guard: %d\n", w_guard); // 153 (:= (2 * ms[0] + 1) * 3)
+    printf("n_max: %d\n", n_max);     // 108
+  }
+  */
+
   // Translating map_lens
   if (threadIdx.x < num_options) {
-    tmp = 2 * ms[threadIdx.x] + 1; 
-    tmp_scan[threadIdx.x] = tmp;
     //map_lens[threadIdx.x] = tmp; We dont need maplens because we do it inline
+    tmp_scan[threadIdx.x] = 2 * ms[threadIdx.x] + 1;
   } else {
     tmp_scan[threadIdx.x] = 0;
   }
   __syncthreads();
-  
-  // Translating the scan (+) over map_len 
-  tmp = scanIncBlock<Add<int>, int>(tmp_scan, threadIdx.x);
-  __syncthreads();
 
+  // Translating the scan (+) over map_len
+  //tmp = scanIncBlock<Add<int>, int>(tmp_scan, threadIdx.x);
+  if(threadIdx.x == 0) {
+    scanIncInt(tmp_scan, w);
+  }
+  __syncthreads();
   if(threadIdx.x < num_options) {
-    scanned_lens[threadIdx.x] = tmp;
+    //scanned_lens[threadIdx.x] = tmp;
+    scanned_lens[threadIdx.x] = tmp_scan[threadIdx.x];
   }
   __syncthreads();
 
-  // Build the flags. Arrays of size w are initialized like so flags[threadIdx.x] = 0.
+  // Build the flags.
   flags[threadIdx.x] = 0;
   sgm_inds[threadIdx.x] = 0;
   __syncthreads();
+  // write out the logic for computing flags and sgm_inds
+
+
   if (threadIdx.x < num_options) {
     if (threadIdx.x == 0) {
-      flags[0] = 2 * ms[0] + 1;
+      flags[0] = 2 * ms[0] + 1; // map_lens[0]; (here it's named tmp_scan)
     } else {
       int flagindex = scanned_lens[threadIdx.x - 1];
       flags[flagindex] = 2 * ms[threadIdx.x] + 1;
@@ -351,7 +394,24 @@ __global__ void trinom_chunk_kernel(
     sgmScanIncInt(sgm_inds, flags, w);
   }
   __syncthreads();
-  
+
+  // print flags and sgm_inds
+  /*
+  if(threadIdx.x == 0) {
+    printf("flags:\n");
+    for (int i = 0; i < w; i++) {
+      printf("%d, ", flags[i]); //[51, 0, ..., 51, ..., 51, ..., 103, ...] 
+    }
+    printf("\n");
+    printf("---------");
+    printf("sgm_inds after sgm_scan: \n"); // [51*0, 51*1, 51*2, 103*3]
+    for (int i = 0; i < w; i++) {
+      printf("%d, ", sgm_inds[i]);
+    }
+    printf("\n");
+  }
+  */
+
   // make the segmented iota across all ms
   iota2mp1[threadIdx.x] = 1;
   __syncthreads();
@@ -361,8 +421,20 @@ __global__ void trinom_chunk_kernel(
   __syncthreads();
   iota2mp1[threadIdx.x] -= 1;
   __syncthreads();
-  
-  // calculate Qs
+
+  // print iota2mp1
+  /*
+  if(threadIdx.x == 0) {
+    printf("iota2mp1:\n");
+    for (int i = 0; i < w; i++) {
+      printf("%d, ", iota2mp1[i]); // [(0, ..., 50) * 3, (0, ..., 102)] 
+    }
+    printf("\n");
+  }
+  */
+
+  // Intialize Qs
+  // i.e., leftmost node in each tree is set to 1 (time zero); all other nodes are set to 0.
   Qs[threadIdx.x] = 0.0;
   __syncthreads();
   if (threadIdx.x < w_guard) {
@@ -374,6 +446,8 @@ __global__ void trinom_chunk_kernel(
   }
   __syncthreads();
 
+  // Initialize alphas
+  // i.e., leftmost node in tree is set to the initial delta_t period interest rate: yield_curve_P[0]
   alphass_[threadIdx.x] = 0.0;
   __syncthreads();
   if (threadIdx.x < num_options) {
@@ -381,28 +455,49 @@ __global__ void trinom_chunk_kernel(
   }
   __syncthreads();
 
+    // checking Q's (Middle of trees are initialized to 1)
+    /*
+    if(threadIdx.x == 0) {
+      printf("Qs before forward propagation\n");
+      for(int j=0; j<w_guard; j++) {
+	printf("Qs[%d]: %.8f\n", j, Qs[j]); // Qs[25] = 1, Qs[76] = 1, Qs[127] = 1
+      }
+
+      // Checking alphas (Leftmost alpha set to 0.05, all other 108 set to 0)
+      printf("Alphas before forward propagation\n");
+      for(int j=0; j < seq_len; j++) {
+	printf("alphass_[%d]: %.8f\n", j, alphass_[j]); // [0.05, (108 * 0), 0.05, (108 * 0), 0.05, (108 * 0)]
+      }
+    }
+    */
+
   // BEGIN FOR LOOP
   for (int i = 0; i < n_max; i++) {
     bool go_on = i < ns[sgm_inds[threadIdx.x]];
+    /*
+    if (threadIdx.x == 0) {
+      printf("i %d, idx %d, sgm_inds %d, ns %d\n", i, threadIdx.x, sgm_inds[threadIdx.x], ns[sgm_inds[threadIdx.x]]);
+    }
+    */
+
     if (go_on) {
       if (threadIdx.x < num_options) {
-        imaxs[threadIdx.x] = min((int)i + 1, (int)jmaxs[threadIdx.x]);
+        imaxs[threadIdx.x] = min((int)i + 1, (int)jmaxs[threadIdx.x]); // min(i+1, 23)
       }
-      QCopys_[threadIdx.x] = Qs[threadIdx.x];
     }
     __syncthreads();
 
     if (go_on) {
-      int sgm_ind = sgm_inds[threadIdx.x];
+      int sgm_ind = sgm_inds[threadIdx.x]; // 0
       if (sgm_ind >= num_options || i >= ns[sgm_ind]) {
         Qs_[threadIdx.x] = 0.0; // Out of bounds on sgm_ind
       } else {
-        int imax = imaxs[sgm_ind];
-        int m    = ms[sgm_ind];
+        int imax = imaxs[sgm_ind]; // 1
+        int m    = ms[sgm_ind]; // 25
         int j    = iota2mp1[threadIdx.x] - m;
         if (j < (-imax) || (j > imax)) {
           Qs_[threadIdx.x] = 0.0; // Error
-        } else {
+        } else { // j must be -1, 0, 1 which is the three values we want to compute next
           int begind;
           if (sgm_ind == 0) {
             begind = 0;
@@ -413,9 +508,10 @@ __global__ void trinom_chunk_kernel(
                  Ms[sgm_ind], drs[sgm_ind],
                  dts[sgm_ind],
                  alphass_[sgm_ind*seq_len+i],
-                 QCopys_, begind, m,
+                 Qs, begind, m,
                  i, imax, jmaxs[sgm_ind], j);
-          Qs_[threadIdx.x] = tmp; 
+          //printf("idx: %d, forward helper returns %.8f\n", threadIdx.x, tmp);
+          Qs_[threadIdx.x] = tmp;
         }
       }
     }
@@ -423,12 +519,12 @@ __global__ void trinom_chunk_kernel(
 
     if (go_on) {
       if(threadIdx.x < w_guard) {
-        int sgm_ind = sgm_inds[threadIdx.x];
-        int imax = sgm_inds[sgm_ind];
+        int sgm_ind = sgm_inds[threadIdx.x]; // 0
+        int imax = imaxs[sgm_ind]; //
         int j = iota2mp1[threadIdx.x] - imax;
         if (j < (-imax) || j > imax || sgm_ind >= num_options || i >= ns[sgm_ind]) {
-          tmpss[threadIdx.x] = 0.0;
-        } else {
+          tmpss[threadIdx.x] = 0.0; // out of bounds error
+        } else { // j must be -1, 0, 1 
           int begind;
           if (sgm_ind == 0) {
             begind = 0;
@@ -436,73 +532,113 @@ __global__ void trinom_chunk_kernel(
             begind = scanned_lens[sgm_ind - 1];
           }
           int Qs_index = begind + j + ms[sgm_ind];
-          tmpss[threadIdx.x] = Qs_[Qs_index] * exp(-(float)j * drs[sgm_ind] * dts[sgm_ind]);
-        }
+          //printf("Qs: %.4f, scalar: %.4f\n", Qs_[Qs_index], exp(-(float)j * drs[sgm_ind] * dts[sgm_ind]));
+          // Some kind of computation on Qs_ values from forwardhelper
+          // Qs: [0.1659, 0.6639, 0.1659] exp = [1.0004, 1.0000, 0.9996]
+          tmpss[threadIdx.x] = Qs_[Qs_index] * exp(-(float)j * drs[sgm_ind] * dts[sgm_ind]);         }
       }
     }
     __syncthreads();
+    
+    /*
+    // checking tmpss
+    if(threadIdx.x == 0) {
+      printf("tmpss after Qs_\n");
+      for(int j=0; j<w_guard; j++) {
+	printf("tmpss[%d]: %.8f\n", j, tmpss[j]); // tmpss[0, 1, 2] = 0.16, 0.66, 0.16
+      }
+    }
+    __syncthreads();
+    */
 
-        
     if (threadIdx.x == 0) {
       sgmScanIncFloat(tmpss, flags, w);
     }
     __syncthreads();
 
+    /*
+    // checking tmpss after scan
+    if(threadIdx.x == 0) {
+      printf("tmpss after scan\n");
+      for(int j=0; j < w_guard; j++) {
+	      printf("tmpss[%d]: %.8f\n", j, tmpss[j]); // Its scanned correctly. tmpss[0, 1] = 0.16, 0.82. Rest is 0.9957
+      }
+    }
+    __syncthreads();
+    */
+
     if (go_on) {
-      if(threadIdx.x < w_guard) {
-        if(threadIdx.x == blockDim.x - 1 || flags[threadIdx.x + 1] > 0) {
+      if(threadIdx.x <= w) {
+        if(flags[threadIdx.x + 1] > 0 || threadIdx.x == blockDim.x - 1) {
           alpha_vals[sgm_inds[threadIdx.x]] = tmpss[threadIdx.x];
         }
       }
     }
     __syncthreads();
     
+    /*
+    // checking alpha_vals
+    if(threadIdx.x == 0) {
+      printf("alpha_vals \n");
+      for(int j=0; j < num_options; j++) {
+	      printf("alpha_vals[%d]: %.8f\n", j, alpha_vals[j]); // alpha_vals[0] = scanned tmpss[50]
+      }
+    }
+    __syncthreads();
+    */
+
     if (go_on) {
       if (threadIdx.x < num_options) {
-        int current_n = ns[threadIdx.x];
+        int current_n = ns[threadIdx.x]; // 108
         if (i >= current_n) {
-          Ps[threadIdx.x] = 1.0; 
+          Ps[threadIdx.x] = 1.0; // Out of bounds on this option 
         } else {
-          float t = (float)(i+1) * dts[threadIdx.x] + 1.0;
-          int t2 = (int) roundf(t);
-          int t1 = t2 - 1;
+          float t = (float)(i+1) * dts[threadIdx.x] + 1.0; // t = 1.0833
+          int t2 = (int) roundf(t); // 1
+          int t1 = t2 - 1; // 0
           if (t2 >= yc_count) {
             t2 = yc_count - 1;
             t1 = yc_count - 2;
           }
-          float R = (yield_curve_P[t2] - yield_curve_P[t1]) / (yield_curve_t[t2] - yield_curve_t[t1]) * (t * 365 - (yield_curve_t[t1]) + (yield_curve_P[t1]));
+          float R = 
+            (yield_curve_P[t2] - yield_curve_P[t1]) /
+            (yield_curve_t[t2] - yield_curve_t[t1]) *
+            (t * 365 - (yield_curve_t[t1])) + (yield_curve_P[t1]);
           float P = exp(-R * t);
+          // R = 0.0008, P = 0.9991
           Ps[threadIdx.x] = P;
         }
       }
     }
     __syncthreads();
-    
+
     // Update alpha_vals
     if(go_on) {
       if (threadIdx.x < num_options) {
-         alpha_vals[threadIdx.x] = log(alpha_vals[threadIdx.x] / Ps[threadIdx.x]);
+        alpha_vals[threadIdx.x] = logf(alpha_vals[threadIdx.x] / Ps[threadIdx.x]); // a: 0.9957, Ps: 0.9462
       }
     }
     __syncthreads();
+    
+    
+    // checking alpha_vals
+    if(threadIdx.x == 0) {
+      printf("alpha_vals after update \n");
+      for(int j=0; j < num_options; j++) {
+	      printf("alpha_vals[%d]: %.8f\n", j, alpha_vals[j]); // alpha_vals[0] = 0.05
+      }
+    }
+    __syncthreads();
+    
     
     if(go_on) {
       if (threadIdx.x < num_options && i < ns[threadIdx.x]) {
-        alpha_inds[threadIdx.x] = threadIdx.x * seq_len + (i+1);
-      } else {
-        alpha_inds[threadIdx.x] = -1;
-      }
-    }
-    __syncthreads();
-
-    if(go_on) {
-      if (threadIdx.x < num_options * seq_len) {
-        alphass_[threadIdx.x] = alpha_vals[alpha_inds[threadIdx.x]];
+        alphass_[threadIdx.x * seq_len + (i+1)] = alpha_vals[threadIdx.x];
       }
     }
     __syncthreads();
     
-    // Qs''
+    // Qs
     if(go_on) {
       if(threadIdx.x < w_guard) {
         int sgm_ind = sgm_inds[threadIdx.x];
@@ -511,79 +647,108 @@ __global__ void trinom_chunk_kernel(
         }
       }
     }
-  } //END OF FOR LOOP
+    __syncthreads();
+
+    // checking that we're running the correct number of times in the for-loop
+    // if(threadIdx.x == 0) { printf("idx: %d -- i: %d\n", threadIdx.x, i); } -- we do!
+
+    
+
+  } //END OF FORWARD-PROPAGATION LOOP
   __syncthreads();
+
+  /*
+  // checking Q's
+  if(threadIdx.x == 0) {
+    for(int j=0; j < w_guard; j++) {
+	    printf("Qs[%d]: %.5f\n", j, Qs[j]);
+    }
+    printf("----------\n");
+    for(int i=0; i < num_options * seq_len; i++) {
+      printf("alphass_[%d]: %.5f\n", i, alphass_[i]);
+    }
+  }
+  __syncthreads();
+  */
 
   // Calls
   if(threadIdx.x < w_guard) {
-    int sgm_ind = sgm_inds[threadIdx.x];
-    float jmax = jmaxs[sgm_ind];
-    float m    = ms[sgm_ind];
+    int sgm_ind = sgm_inds[threadIdx.x]; // 0
+    float jmax = jmaxs[sgm_ind]; // 23
+    float m    = ms[sgm_ind]; // 25
     float j = iota2mp1[threadIdx.x];
-    if (j >= -jmax+m && j <= jmax + m) {
-      Calls[threadIdx.x] = 1.0;
+    if (m-jmax <= j && j <= m + jmax) {
+      Calls[threadIdx.x] = 1.0; // 2 <= threadid <= 48
     } else {
       Calls[threadIdx.x] = 0.0;
     }
   }
   __syncthreads();
 
-  // START OF LOOP
+  // START OF BACKWARD-PROPAGATION LOOP
   for (int ii = 0; ii < n_max; ii++) {
     bool go_on = ii < ns[sgm_inds[threadIdx.x]];
 
     if(go_on) {
-      if (threadIdx.x >= num_options) {
-        is[threadIdx.x] = 0;
-      } else {
-        is[threadIdx.x] = ns[threadIdx.x] - 1 - ii;
+      if (threadIdx.x < num_options) {
+        is[threadIdx.x] = ns[threadIdx.x] - 1 - ii; // 107
       }
     }
     __syncthreads();
 
     if(go_on) {
       if (threadIdx.x < num_options) {
-        imaxs[threadIdx.x] = min((is[threadIdx.x]+1), jmaxs[threadIdx.x]);
+        imaxs[threadIdx.x] = min((is[threadIdx.x]+1), jmaxs[threadIdx.x]); // 23
       }
     }
-    
-    CallCopys_[threadIdx.x] = Calls[threadIdx.x];
     __syncthreads();
 
     if(go_on) {
       if (threadIdx.x < w_guard) {
-        int sgm_ind = sgm_inds[threadIdx.x];
+        int sgm_ind = sgm_inds[threadIdx.x]; // 0
         if (sgm_ind >= num_options || ii >= ns[sgm_ind]) {
-          Calls_[threadIdx.x] = 0.0;
+          Calls_[threadIdx.x] = 0.0; // Out of bounds on segment
         } else {
-          int imax = imaxs[sgm_ind];
-          int i = is[sgm_ind];
-          int m = ms[sgm_ind];
+          int imax = imaxs[sgm_ind]; // 23
+          int i = is[sgm_ind]; // 107
+          int m = ms[sgm_ind]; // 25
           int j = iota2mp1[threadIdx.x] - m;
           if (j < (-imax) || j > imax) {
             Calls_[threadIdx.x] = 0.0;
-          } else {
+          } else { // j must be -1, 0, 1
             int begind = (sgm_ind == 0) ? 0 : scanned_lens[sgm_ind-1];
-            Calls_[threadIdx.x] = backward_helper(Xs[sgm_ind], Ms[sgm_ind], drs[sgm_ind],
-                           dts[sgm_ind], alphass_[sgm_ind * seq_len + i],
-                           CallCopys_, begind, ms[sgm_ind], i,
-                           jmaxs[sgm_ind], j);
+            float tmp =
+              backward_helper (Xs[sgm_ind], Ms[sgm_ind], drs[sgm_ind],
+                               dts[sgm_ind], alphass_[sgm_ind * seq_len + i],
+                               Calls, begind, ms[sgm_ind],
+                               i, jmaxs[sgm_ind], j);
+            Calls_[threadIdx.x] = tmp;
           }
         }
       }
     }
+    __syncthreads();
 
     // Update calls
-    __syncthreads();
     if(go_on) {
       if (threadIdx.x < w_guard) {
-        int sgm_ind = sgm_inds[threadIdx.x];
+        int sgm_ind = sgm_inds[threadIdx.x]; // 0
         if (sgm_ind < num_options && ii < ns[sgm_ind]) {
           Calls[threadIdx.x] = Calls_[threadIdx.x];
         }
       }
     }
+    __syncthreads();
   } // END OF FOR LOOP
+  __syncthreads();
+  
+  // checking Calls
+  if(threadIdx.x == 0) {
+    for(int j=0; j < w_guard; j++) {
+	    printf("Calls[%d]: %.5f\n", j, Calls[j]);
+    }
+    printf("----------\n");
+  }
   __syncthreads();
 
   if (threadIdx.x < num_options) {
@@ -617,7 +782,7 @@ int main()
                               0.0739790,
                               0.0749015 };
   float yield_curve_t[11] = { 3.0   ,
-                              367.0 , 
+                              367.0 ,
                               731.0 ,
                               1096.0,
                               1461.0,
@@ -633,8 +798,8 @@ int main()
 
   // set maximum chunk size
   int w = 256;
-  int num_all_options = 3;
-  int number_of_chunks = 1; // number of chunks?
+  int total_number_of_options = 3;
+  int number_of_chunks = 1;
 
   float T  = h_maturity[0];
   int n    = h_num_terms[0];
@@ -642,14 +807,14 @@ int main()
   float dt = T / n;
   float M  = exp(-a * dt) - 1.0;
   int jmax = ((int)(-0.184 / M)) + 1;
-  int m = jmax + 2;
+  int m    = jmax + 2;
 
   // start out with: (assuming that all options are equal)
   int n_max = n;
-  int m_max = m;
+  int m_max = 2 * m + 1;
   int max_options_in_chunk = w / m_max;
   //int mem_size = num_all_options * sizeof(float) * m_max * n_max;
-  float* h_output = (float*) malloc(sizeof(float) * num_all_options);
+  float* h_output = (float*) malloc(sizeof(float) * total_number_of_options);
 
   // compute: chunks
   // each thread should know here to read from when data is
@@ -658,108 +823,111 @@ int main()
   struct timeval t_start, t_end, t_diff;
   gettimeofday(&t_start, NULL);
 
-  { // Allocate arrays on device
-    float* d_strikes;
-    float* d_maturities;
-    float* d_reversion_rates;
-    float* d_volatilities;
-    int* d_num_terms;
-    float* d_output;
-    int* d_options_per_chunk;
-    int* d_option_indices;
-    float* d_yield_curve_P;
-    float* d_yield_curve_t;
-    float* d_alphass;
+  // Allocate arrays on device
+  float* d_strikes;
+  float* d_maturities;
+  float* d_reversion_rates;
+  float* d_volatilities;
+  int* d_num_terms;
+  float* d_output;
+  int* d_options_per_chunk;
+  int* d_option_indices;
+  float* d_yield_curve_P;
+  float* d_yield_curve_t;
+  float* d_alphass;
 
-    cudaMalloc((void**)&d_strikes, num_all_options * sizeof(float)); 
-    cudaMalloc((void**)&d_maturities, num_all_options * sizeof(float)); 
-    cudaMalloc((void**)&d_reversion_rates, num_all_options * sizeof(float)); 
-    cudaMalloc((void**)&d_volatilities, num_all_options * sizeof(float)); 
-    cudaMalloc((void**)&d_num_terms, num_all_options * sizeof(int));
-    cudaMalloc((void**)&d_output, num_all_options * sizeof(float));
-    cudaMalloc((void**)&d_options_per_chunk, num_all_options * sizeof(int));
-    cudaMalloc((void**)&d_option_indices, num_all_options * sizeof(int));
-    cudaMalloc((void**)&d_yield_curve_P, 11 * sizeof(float));
-    cudaMalloc((void**)&d_yield_curve_t, 11 * sizeof(float));
-    cudaMalloc((void**)&d_alphass, num_all_options * (n_max + 1) * sizeof(float));
+  cudaMalloc((void**)&d_strikes, total_number_of_options * sizeof(float));
+  cudaMalloc((void**)&d_maturities, total_number_of_options * sizeof(float));
+  cudaMalloc((void**)&d_reversion_rates, total_number_of_options * sizeof(float));
+  cudaMalloc((void**)&d_volatilities, total_number_of_options * sizeof(float));
+  cudaMalloc((void**)&d_num_terms, total_number_of_options * sizeof(int));
+  cudaMalloc((void**)&d_output, total_number_of_options * sizeof(float));
+  cudaMalloc((void**)&d_options_per_chunk, total_number_of_options * sizeof(int));
+  cudaMalloc((void**)&d_option_indices, total_number_of_options * sizeof(int));
+  cudaMalloc((void**)&d_yield_curve_P, 11 * sizeof(float));
+  cudaMalloc((void**)&d_yield_curve_t, 11 * sizeof(float));
+  cudaMalloc((void**)&d_alphass, total_number_of_options * (n_max + 1) * sizeof(float));
 
-    // some kind of guard (if an option is too large to fit into any block - abort)
+  // some kind of guard (if an option is too large to fit into any block - abort)
 
-    // copy data from host to device
-    cudaMemcpy(d_strikes, h_strikes, num_all_options * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_maturities, h_maturity, num_all_options * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_reversion_rates, h_reversion_rate, num_all_options * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_volatilities, h_volatilities, num_all_options * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_num_terms, h_num_terms, num_all_options * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_output, h_output, num_all_options * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_options_per_chunk, h_options_per_chunk, number_of_chunks * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_option_indices, h_option_indices, num_all_options * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_yield_curve_P, yield_curve_P, sizeof(yield_curve_P), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_yield_curve_t, yield_curve_t, sizeof(yield_curve_t), cudaMemcpyHostToDevice);
+  // copy data from host to device
+  cudaMemcpy(d_strikes, h_strikes, total_number_of_options * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_maturities, h_maturity, total_number_of_options * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_reversion_rates, h_reversion_rate, total_number_of_options * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_volatilities, h_volatilities, total_number_of_options * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_num_terms, h_num_terms, total_number_of_options * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_output, h_output, total_number_of_options * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_options_per_chunk, h_options_per_chunk, number_of_chunks * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_option_indices, h_option_indices, total_number_of_options * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_yield_curve_P, yield_curve_P, sizeof(yield_curve_P), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_yield_curve_t, yield_curve_t, sizeof(yield_curve_t), cudaMemcpyHostToDevice);
 
-    // compute block and grid dimensions
-    // - block: (1, 1, w)
-    // - grid:  (1, ceil(sum(Qlen) / w)
-    dim3 block_dim(w, 1, 1);
-    dim3 grid_dim(number_of_chunks, 1, 1);
-    unsigned int sh_mem_size = (11 * w + 12 * max_options_in_chunk) * 4 + sizeof(int) + (n_max + 1) * sizeof(float);
+  // compute block and grid dimensions
+  // - block: (1, 1, w)
+  // - grid:  (1, ceil(sum(Qlen) / w)
+  dim3 block_dim(w, 1, 1);
+  dim3 grid_dim(number_of_chunks, 1, 1);
+  unsigned int sh_mem_size = (9 * w + 12 * max_options_in_chunk) * 4 + sizeof(int);
 
 
-    // execute kernel
-    trinom_chunk_kernel<<<grid_dim, block_dim, sh_mem_size>>> (
-        num_all_options,
-        max_options_in_chunk,
-        d_options_per_chunk,
-        d_option_indices,
+  // execute kernel
+  trinom_chunk_kernel<<<grid_dim, block_dim, sh_mem_size>>> (
+							     total_number_of_options,
+							     max_options_in_chunk,
+							     d_options_per_chunk,
+							     d_option_indices,
 
-        // These 4 have length num_all_options
-        d_strikes,
-        d_maturities,
-        d_reversion_rates,
-        d_volatilities,
+							     // These 4 have length num_all_options
+							     d_strikes,
+							     d_maturities,
+							     d_reversion_rates,
+							     d_volatilities,
 
-        n_max,    // maximum number of time steps
-        d_num_terms,
-                                   
-        yc_count,
-        d_yield_curve_P,
-        d_yield_curve_t,
-        d_alphass,
-        d_output
-    );
-    cudaThreadSynchronize();
+							     n_max,    // maximum number of time steps
+							     d_num_terms,
 
-    // copy data from device to host
-    cudaMemcpy(h_output, d_output, num_all_options * sizeof(float), cudaMemcpyDeviceToHost);
+							     yc_count,
+							     d_yield_curve_P,
+							     d_yield_curve_t,
+							     d_alphass,
+							     d_output
+							     );
+  cudaThreadSynchronize();
 
-    cudaFree(d_output);
-    cudaFree(d_strikes);
-    cudaFree(d_maturities);
-    cudaFree(d_reversion_rates);
-    cudaFree(d_volatilities);
-    cudaFree(d_num_terms);
-    cudaFree(d_options_per_chunk);
-    cudaFree(d_option_indices);
-    cudaFree(d_alphass);
-  }
+  // copy data from device to host
+  cudaMemcpy(h_output, d_output, total_number_of_options * sizeof(float), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_output);
+  cudaFree(d_strikes);
+  cudaFree(d_maturities);
+  cudaFree(d_reversion_rates);
+  cudaFree(d_volatilities);
+  cudaFree(d_num_terms);
+  cudaFree(d_options_per_chunk);
+  cudaFree(d_option_indices);
+  cudaFree(d_alphass);
 
   gettimeofday(&t_end, NULL);
   timeval_subtract(&t_diff, &t_end, &t_start);
   elapsed = (t_diff.tv_sec * 1e6 + t_diff.tv_usec);
   printf("Trinom kernel runs in %lu microsecs\n", elapsed);
 
+  for(int i=0; i<total_number_of_options; i++) {
+    printf("option[%d] = %.5f\n", i, h_output[i]);
+  }
+
+  /*
   // Time to validate result
   bool success = true;
-  /*for(int i = 0; i < sizeof(h_output) / sizeof(float); i++) {
+  for(int i = 0; i < sizeof(h_output) / sizeof(float); i++) {
     if (h_output[i] != 0.142982) {
       success = false;
       printf("answer: %.5f\n", h_output[i]);
     }
   }
-  
   printf("answer: %.5f\n", h_output[0]);
-  if (success) printf("VALID RESULT!\n");
-  else         printf("INVALID RESULT!\n");
+  if(success) { printf("VALID RESULT!\n");   }
+  else        { printf("INVALID RESULT!\n"); }
   */
 
   free(h_output);
