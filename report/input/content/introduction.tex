@@ -1,0 +1,28 @@
+\section{Introduction}
+
+The demand for computational power is ever-increasing and as
+a consequence, a growing interest in general-purpose
+computing on GPUs emerged. The GPU source of power -- a
+highly parallel structure -- imposes some challenges, one of
+them being writing parallel code. Functional programming has
+shown to be a good way of approaching this challenge as it
+allows writing data-parallel code using inherently-parallel
+operators.
+
+The above reason is the main motivation behind the Futhark
+programming language~\cite{futharkweb}: A pure functional
+data-parallel array language and a heavily optimizing
+compiler which is able to generate parallel code running on
+GPUs.
+
+In this document we describe a model developed by Hull and
+White~\cite{HullWhite94} for computing interest rate trees,
+and how such trees can be used to price derivatives. This
+approach has been implemented in Futhark for option pricing
+and the task of this project is to translate this program
+into CUDA.
+%% Due to the financial crisis in 2008 the general demand of
+%% computation was further enhanced in the financial sector,
+%% .e.g., banks want to perform a vast amount of computations
+%% when making risk assessments enabling them to make better
+%% decisions.

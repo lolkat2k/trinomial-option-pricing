@@ -11,6 +11,22 @@
 % https://en.wikibooks.org/wiki/LaTeX/Special_Characters
 \usepackage[utf8]{inputenc}
 
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage[labelfont=bf]{caption}
+\usepackage{url}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  columns=fixed,
+  breaklines=true
+}
+
+%% separators for figures
+\def\topfigrule{\vskip1ex\noindent\dotfill}
+\def\botfigrule{\noindent\dotfill\vskip2ex}
+
+
 % font
 \usepackage{palatino}
 
@@ -25,9 +41,9 @@
 \author{
   Hjalte Abelskov
   \and
-  Dolapo Olunlade
-  \and
   Sune Hellfritzsch
+  \and
+  Dolapo Olunlade
 }
 
 % placeholder text

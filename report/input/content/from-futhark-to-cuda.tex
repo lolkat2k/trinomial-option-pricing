@@ -1,0 +1,218 @@
+\section{Implementation in CUDA}
+
+The project task is to develop a CUDA implementation
+semantically equivalent to the flat Futhark version. This is
+simply a one-to-one translation from Futhark to CUDA of the
+function \texttt{trinomialChunk}, except for the fact that
+memory management in CUDA is explicit and thus needs to be
+handled. This leads to optimization considerations as well.
+
+In the following we describe in detail both the simple
+translation task along with the memory management and
+optimization considerations.
+
+
+\subsection{Translating from Futhark to CUDA}
+
+In this section we describe the translations of the Futhark
+second-order array combinators \texttt{map} and
+\texttt{scatter} to semantically equivalent CUDA
+code. Furthermore, we also address some problems with a
+block-level segmented scan that was provided to us. For more
+information on Futhark SOACs see~\cite{futharkdoc}.
+
+\subsubsection{Translating \texttt{map}}
+
+The map operator is inherently data-parallel as one thread
+can apply the input function to one element in the array in
+parallel. However we need to be a little cautious 
+about which threads that apply the input function. 
+Throughout the kernel we use guards e.g. if-statements 
+to ensure that only the correct threads are working.
+Say we have $256$ threads working on some array storing one value
+per option. This array could have length less than $256$. CUDA 
+enables us to smoothly get around this with a guard that only
+lets threads with thread-id less than the number of options through.
+We show an example of how a map translation is done in
+Figure~\ref{fig:trans_map}. Note, that the map operator 
+in Futhark is able to take multiple input arrays.
+%
+\begin{figure}[bt]
+\begin{center}
+%% Futhark
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+let map_lens = map
+  (\m i -> if i < optionsInChunk
+           then 2*m + 1
+           else 0
+  )
+ms (iota maxOptionsInChunk)
+\end{lstlisting}
+\end{minipage}
+%% CUDA
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+if(threadIdx.x <
+   options_in_chunk)
+{
+  map_lens[threadIdx.x] =
+    2 * ms[threadIdx.x] + 1;
+} else {
+  map_lens[threadIdx.x] = 0;
+}
+\end{lstlisting}
+\end{minipage}
+\caption{Translating \texttt{maps} from Futhark (left) to
+  CUDA (right).}
+\label{fig:trans_map}
+\end{center}
+\end{figure}
+%
+
+
+
+
+\subsubsection{Translating \texttt{scatter}}
+
+The scatter operator, written \lstinline{scatter arr is vs},
+writes the values of \lstinline{vs} at indices
+\lstinline{is} to the same indices in \lstinline{arr}. It is
+then inherently data-parallel assuming undefined behaviour
+if the index array has duplicates.
+
+In absence of duplicate indices no thread reads from nor
+writes to the same indices in the value and destination
+arrays, respectively. This can be seen as an in-place
+update. In Figure~\ref{fig:trans_scatter} we show how a
+scatter in Futhark can be translated to CUDA.
+%
+\begin{figure}[bt]
+\begin{center}
+%% Futhark
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+let alphass = scatter
+              alphass
+              alpha_inds
+              alpha_vals
+\end{lstlisting}
+\end{minipage}
+%% CUDA
+\begin{minipage}[t]{0.45\linewidth}
+\vspace{0pt}
+\begin{lstlisting}
+alphass[threadIdx.x] =
+  alpha_vals[
+    alpha_inds[threadIdx.x]
+  ];
+\end{lstlisting}
+\end{minipage}
+\caption{Translating \texttt{scatter} from Futhark (left) to
+  CUDA (right).}
+\label{fig:trans_scatter}
+\end{center}
+\end{figure}
+%%
+
+
+\subsubsection{Translating \texttt{scan}}
+
+When calculating interest rate trees it seems very preferable to
+have a block-level segmented scan operator at your disposal.
+One was provided for us, but unfortunately the handed out code caused what
+seems like race-conditions, that we were not able to correct.
+
+The current implementation circumvent this problem by using
+a single thread performing a sequential block-level scan.
+Of course this is not in the spirit of parallel programming,
+and should be regarded as a quick fix that allowed us to progress
+in getting the code to validate.
+
+
+\subsection{Shared memory management}
+
+Memory access and memory usage are almost always a concern and
+programming for GPUs is no exception. Scarcity of resources
+and penalty for suboptimal access can have a huge impact on
+programs running on GPUs, which becomes evident when the
+goal is fast programs.
+
+The CUDA programming model have an overall memory hierarchy
+in three levels: thread-local memory, shared memory, and
+global memory. Thread-local memory we use only for a few
+variables per thread. Global memory is used for all
+read-only input arrays, and a single read-write array
+holding the alphas for all time steps for all options in a
+block. This latter array is both large relative to the other
+arrays in shared memory and rarely accessed, thus a good fit
+for the larger and slower global memory.
+
+In our program we have an intricate system of shared memory
+allocations, shown in Figure~\ref{fig:shmem}, due to the
+problem structure: There is a one-to-many relationship
+between the input arrays to the kernel, which are holding
+per-option data, to the number of threads working on each
+option. Because each thread needs access to its option's data
+we allocate shared memory in which threads can read and write
+common values. These arrays are fairly small and
+frequently accessed.
+%
+\begin{figure}[bt]
+\begin{center}
+\begin{lstlisting}
+extern __shared__ char sh_mem[];
+(..)
+volatile int* tmp_scan     = (int*) sh_mem;
+volatile int* sgm_inds     = (int*) (tmp_scan + w);
+(..)
+volatile float* Ps     = (float*) (is + max_options_in_chunk);
+volatile float* Xs     = (float*) (Ps  + max_options_in_chunk);
+(..)
+if (threadIdx.x < num_options) {
+  int option_id = options_in_chunk[threadIdx.x];
+  Xs[threadIdx.x] = strikes[option_id];
+  (..)
+}
+\end{lstlisting}
+\caption{Organising shared memory.}
+\label{fig:shmem}
+\end{center}
+\end{figure}
+%
+
+As seen in Figure~\ref{fig:shmem}, shared memory is placed 
+consecutively starting from address \texttt{sh\_mem}: Arrays are then just pointers
+to memory. Arrays of size \texttt{w}, such as \texttt{tmp\_scan} and \texttt{sgm\_inds} are defined
+first. After that follows arrays of size \texttt{max\_options\_in\_chunk}.
+
+Arrays of size \texttt{max\_options\_in\_chunk} are then guarded with the
+number of options in the chunk and indexed into with the corresponding
+\texttt{option\_id}.
+
+%
+\begin{figure}[bt]
+\begin{center}
+\begin{lstlisting}
+unsigned int sh_mem_size =
+  (11 * w + 12 * max_options_in_chunk) * 4 +
+  sizeof(int) + (n_max + 1) * sizeof(float);
+(..)
+trinom_chunk_kernel<<<grid_dim, block_dim, sh_mem_size>>> ( ..)
+\end{lstlisting}
+\end{center}
+\caption{Allocation shared memory on the GPU from the host.}
+\label{fig:allocshmem}
+\end{figure}
+%
+By virtue of our direct-translation strategy and Futharks
+immutability of data we have a lot of arrays in shared
+memory. (Note, that Futhark allows in-place updates by use
+of uniqueness types.) At one point all these arrays in shared
+memory caused the kernel invocation to actually not execute.
+One should also have the small shared memory capacity in mind
+when writing CUDA.
+

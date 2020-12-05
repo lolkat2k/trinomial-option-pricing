@@ -1,0 +1,41 @@
+\subsection{Future work}
+
+Unfortunately the program does not validate at the current
+time of writing. For future work we should look into how
+the first loop calculates the Qs and the alphas.
+Right now our alphas become negative, which just seems wrong.
+We should take a look at how they are computed from tmpss,
+and try and figure out how alpha\_inds and alpha\_vals are
+used to update specific alphas. If we get that part right
+we are very close to validating as the second loop is really
+tiny compared to what we have already implemented.
+
+Despite the lack of an in-depth knowledge of derivatives
+pricing in practice we propose two possible optimization
+strategies that could be investigated. Both proposals are
+based on splitting the described pricing process into two
+steps: 1) compute the tree of short rates, and 2) compute
+the derivative price.
+
+The first approach is based on partial evaluation and the
+less known data specialisation
+technique~\cite{malmkjaer,chirokoff}. Partial evaluation
+aims at precomputing all static input known at compile time,
+generating a new semantically equivalent but faster
+program. Data specialisation on the other hand, stores the
+precomputed values in a data structure which is then passed
+to a modified version of the original program that is able
+to use the data structure. Using the latter technique, if some
+range of interest dependent derivatives use the same tree of
+short rates, we need only to compute this tree once. With
+the former technique faster pricing programs could be
+generated automatically, say once per hour, by inlining the
+short rate tree in the pricing program, if the market term
+structure is only updated in intervals of one hour.
+
+The second approach is hinted to in~\cite{HullWhite94} and
+mentions how an extension of the described model is able to
+fit two term structures simultaneously. It would be worth
+investigating if this extension has some underlying general
+pattern allowing multiple term structures to be fitted
+simultaneously.
